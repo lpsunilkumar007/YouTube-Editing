@@ -43,10 +43,14 @@ def build(cfg, plan, analysis, meta, out_mp4, only=None, gate="full_render"):
     g = layout.geometry(cfg, analysis["slide_area"], masks, analysis.get("counter_box")); L = layout.static_layers(cfg, g, os.path.join(wd, "layers"))
     off = plan["offset_s"]; segs = plan["segments"]; ft = None
     if os.path.exists(os.path.join(A["analysis"], "face_track.npy")): ft = np.load(os.path.join(A["analysis"], "face_track.npy"))
+    v = meta["face_camera"]["video"]; sw, sh = v["width"], v["height"]
+    if abs(v.get("rotation") or 0) == 90: sw, sh = sh, sw                         # crops are in displayed (rotated) pixels
     crops = {}
     for grp in _takes(segs):
-        c = render.fixed_crop(cfg, ft, segs[grp[0]]["face_in"], segs[grp[-1]]["face_out"])
+        c = render.fixed_crop(cfg, ft, segs[grp[0]]["face_in"], segs[grp[-1]]["face_out"], sw, sh)
         for i in grp: crops[i] = c
+    for i, s in enumerate(segs):
+        if s["layout"] == "A": crops[i] = render.frame_crop(ft, s["face_in"], s["face_out"], sw, sh, g["W"], g["H"])
     els = graphics.render_elements(cfg, plan.get("elements", [])) if plan.get("elements") else {}
     nums = slide_numbers(analysis["slide_changes"], off) if (g.get("counter") or {}).get("hidden_by_camera") else []
     parts = []

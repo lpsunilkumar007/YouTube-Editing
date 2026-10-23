@@ -28,8 +28,10 @@ def _pose(m):
     return yaw, pitch, roll
 
 def decode(cfg, src, a, b, fps, pipeline, w=1280, h=720):
-    chain = (f"libplacebo={cfg['color']['libplacebo']}:w={w}:h={h}:format=yuv444p,scale=in_color_matrix=bt709:in_range=tv,format=rgb24"
-             if pipeline == "libplacebo" else f"scale={w}:{h},format=rgb24")
+    from . import render
+    crop = render.wide_crop(src)                       # sources wider than 16:9 are cropped, not stretched
+    chain = (render.face_filter(cfg, pipeline, w, h, crop, "yuv444p") + ",scale=in_color_matrix=bt709:in_range=tv,format=rgb24"
+             if pipeline == "libplacebo" else render.face_filter(cfg, pipeline, w, h, crop, "rgb24"))
     cmd = ["ffmpeg", "-v", "error", *(["-init_hw_device", "vulkan"] if pipeline == "libplacebo" else []), "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}",
            "-i", src, "-vf", f"fps={fps},{chain}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE); k = 0

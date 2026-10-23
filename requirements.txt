@@ -4,6 +4,7 @@ scipy==1.18.1
 pillow==12.3.0
 opencv-python-headless==4.14.0.94
 faster-whisper==1.2.1
+av==16.1.0                 # faster-whisper 1.2.1 passes metadata_errors=, which PyAV 19 removed (pinned on Mac, 2026-10-23)
 ctranslate2==4.8.3
 jsonschema==4.26.0
 mediapipe==1.1.1

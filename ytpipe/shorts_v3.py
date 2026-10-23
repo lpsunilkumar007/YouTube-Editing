@@ -221,6 +221,12 @@ def render(cfg, final, cues, parts, offset, ft, pipeline, out, glossary_terms, e
     shot; split proportions and the presenter crop come from the parent A part, so only the desktop reframes."""
     d = os.path.join(os.path.dirname(out), "_v3"); os.makedirs(d, exist_ok=True); hw = ["-init_hw_device", "vulkan"] if pipeline == "libplacebo" else []
     face, desk = cfg["sources"]["face_camera"], cfg["sources"]["desktop_recording"]; files, info = [], []
+    wc = R.wide_crop(face); src = lambda c: c                              # face crops below are in 1920x1080 frame space
+    if wc:                                                                 # wider source (e.g. 2864x1322): frame space = its
+        fs = wc[3] / 1080; sw = 2 * wc[0] + wc[2]                           # centre 16:9 window, mapped uniformly (no stretch)
+        if ft is not None:
+            ft = ft.copy(); ft[:, 1] = (ft[:, 1] * sw / 1920 - wc[0]) / fs; ft[:, 3] = ft[:, 3] * sw / 1920 / fs
+        src = lambda c: [wc[0] + c[0] * fs, c[1] * fs, c[2] * fs, c[3] * fs]
     e0 = edit_time(parts[0][0]); pieces = pieces_of(parts, segments, cut_out)
     for k, (f0, f1, lay, P0, P1) in enumerate(pieces):
         T = round((f1 - f0) * FPS) / FPS; po = os.path.join(d, f"p{k}.mp4"); ass = po.replace(".mp4", ".ass")
@@ -228,7 +234,7 @@ def render(cfg, final, cues, parts, offset, ft, pipeline, out, glossary_terms, e
         base = ["ffmpeg", "-v", "error", "-y", *hw, "-ss", f"{f0:.4f}", "-t", f"{T:.4f}", "-i", face]
         if lay == "B":
             cx, cy, fw = _face_center(ft, P0, P1); cw = 608; x = min(max(0, cx - cw / 2), 1920 - cw)
-            fc = f"[0:v]fps={FPS},{_pl(cfg, pipeline, W, H, [x, 0, cw, 1080])},setsar=1,subtitles='{_esc(ass)}'[v]"; cmd = base
+            fc = f"[0:v]fps={FPS},{_pl(cfg, pipeline, W, H, src([x, 0, cw, 1080]))},setsar=1,subtitles='{_esc(ass)}'[v]"; cmd = base
             info.append({"part": k, "layout": "B full-frame presenter", "face_crop": [int(x), 0, cw, 1080], "upscale": round(H / 1080, 2)})
         else:
             D0 = f0 + offset
@@ -248,7 +254,7 @@ def render(cfg, final, cues, parts, offset, ft, pipeline, out, glossary_terms, e
                   f"[1:v]fps={FPS},crop={cw}:{ch}:{x}:{y},scale={w}:{h}:flags=lanczos,setsar=1[dk];[bg][dk]overlay={bx + px}:{by + py}[s1];")
             if lay == "A":
                 fx, fy, fw_, fh_ = pres; pc = presenter_crop(ft, *(gs["parent"] if gs else (P0, P1)), fw_ / fh_, face_y=0.30)
-                fc += f"[0:v]fps={FPS},{_pl(cfg, pipeline, fw_, fh_, pc)},setsar=1[pr];[s1][pr]overlay={fx}:{fy}[s2];[s2]subtitles='{_esc(ass)}'[v]"
+                fc += f"[0:v]fps={FPS},{_pl(cfg, pipeline, fw_, fh_, src(pc))},setsar=1[pr];[s1][pr]overlay={fx}:{fy}[s2];[s2]subtitles='{_esc(ass)}'[v]"
                 info.append({"part": k, "layout": "A guided split" if gs else "A split", "src": [P0, P1], "desktop_crop": [x, y, cw, ch], "desktop_scale": round(w / cw, 3), "presenter_crop": [int(v) for v in pc]})
             else:
                 fc += f"[s1]subtitles='{_esc(ass)}'[v]"

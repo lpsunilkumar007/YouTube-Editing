@@ -11,7 +11,7 @@ the person are never reshaped, smoothed, sharpened or regenerated; only an alpha
 import html as _h, json, os, subprocess
 import numpy as np
 from PIL import Image, ImageFilter
-from . import faces
+from . import faces, render as R
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HF_DIR = os.path.join(ROOT, "_work", "hf")
@@ -264,7 +264,7 @@ def run(cfg, rows, spec_file, out_dir, name="thumbnail_premium_v2", only=None):
         r = cand[0]; fr = os.path.join(fdir, f"F{r['t']:07.2f}.png")
         if not os.path.exists(fr):
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-init_hw_device", "vulkan", "-ss", f"{r['t']:.2f}", "-i", cfg["sources"]["face_camera"],
-                            "-frames:v", "1", "-vf", f"libplacebo={cfg['color']['libplacebo']}:w=1920:h=1080:format=yuv420p", fr], check=True)
+                            "-frames:v", "1", "-vf", R.face_filter(cfg, "libplacebo", 1920, 1080, R.wide_crop(cfg["sources"]["face_camera"]), "yuv420p"), fr], check=True)
         person = cutout(fr, r["box"], fr.replace(".png", f"_{crop}_cut.png"), crop)
         png = os.path.join(out_dir, f"{name}_{k}.png"); info = render(o, person, png)
         for _ in range(4):                                       # measured-layout fitting (text never on the head, inside margins)
