@@ -1,0 +1,54 @@
+{
+  "_help": "EXAMPLE ONLY - hypothetical Lesson 02 paths; no footage has been processed with this file.",
+  "face_camera": "D:/YouTube-Editing/lessons/lesson02/raw/face_camera.MOV",
+  "desktop_recording": "D:/YouTube-Editing/lessons/lesson02/raw/desktop_recording.mkv",
+  "lecture_topic": "Algorithms and Flowcharts",
+  "lesson_number": 2,
+  "language": "Hinglish",
+  "overrides": {
+    "layout": {
+      "camera": {
+        "diameter": 368,
+        "position": "lower-right"
+      }
+    },
+    "zoom": {
+      "range": [
+        1.2,
+        1.4
+      ]
+    },
+    "audio": {
+      "music": {
+        "enabled": true
+      }
+    },
+    "captions": {
+      "format": [
+        "srt"
+      ]
+    },
+    "graphics": {
+      "kinds": [
+        "title",
+        "topic",
+        "term",
+        "end"
+      ]
+    },
+    "youtube": {
+      "links": {
+        "playlist": "{{PLAYLIST_URL}}"
+      }
+    },
+    "shorts": {
+      "max_candidates": 3
+    },
+    "output": {
+      "resolution": [
+        1920,
+        1080
+      ]
+    }
+  }
+}

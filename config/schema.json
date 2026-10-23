@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ytpipe resolved lecture config (types only; semantic checks live in ytpipe/config.py)",
+  "type": "object",
+  "required": ["project", "sources", "sync", "editing", "layout", "zoom", "graphics", "captions", "audio", "thumbnails", "youtube", "shorts", "output", "qa"],
+  "properties": {
+    "project": { "type": "object", "properties": {
+      "lecture_topic": { "type": "string", "minLength": 3 }, "lesson_number": { "type": ["integer", "null"], "minimum": 1 },
+      "lesson_id": { "type": ["string", "null"], "pattern": "^[a-z0-9_]+$" }, "language": { "type": "string" } } },
+    "sources": { "type": "object", "properties": { "face_camera": { "type": "string" }, "desktop_recording": { "type": "string" } } },
+    "sync": { "type": "object", "properties": { "max_uncertainty_s": { "type": "number", "exclusiveMinimum": 0 },
+      "manual_offset_s": { "type": ["number", "null"] } } },
+    "layout": { "type": "object", "properties": { "camera": { "type": "object", "properties": {
+      "diameter": { "type": "integer" }, "margin": { "type": "integer", "minimum": 0 }, "crop_square": { "type": "integer" },
+      "face_center_y": { "type": "number", "minimum": 0, "maximum": 1 } } } } },
+    "zoom": { "type": "object", "properties": { "range": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } } },
+    "captions": { "type": "object", "properties": { "max_chars_per_line": { "type": "integer", "minimum": 20, "maximum": 60 },
+      "max_lines": { "type": "integer", "minimum": 1, "maximum": 3 } } },
+    "thumbnails": { "type": "object", "properties": { "size": { "type": "array", "items": { "type": "integer" } },
+      "face_cutout": { "enum": ["rembg", "none"] } } },
+    "shorts": { "type": "object", "properties": { "max_candidates": { "type": "integer", "minimum": 0, "maximum": 10 } } },
+    "output": { "type": "object", "properties": { "resolution": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
+      "fps": { "type": "integer", "minimum": 1 } } }
+  }
+}

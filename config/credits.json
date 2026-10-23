@@ -1,0 +1,50 @@
+{
+ "sincerely_macleod": {
+  "asset": "Sincerely",
+  "creator": "Kevin MacLeod",
+  "source": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sincerely.mp3",
+  "license": "Creative Commons Attribution 4.0 (CC BY 4.0)",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "isrc": "USUAN1900016",
+  "commercial_youtube": "permitted with attribution (incompetech FAQ)",
+  "attribution": "\"Sincerely\" Kevin MacLeod (incompetech.com)\nLicensed under Creative Commons: By Attribution 4.0\nhttps://creativecommons.org/licenses/by/4.0/",
+  "content_id_note": "Pre-registered in Content ID; add the credit to the description before publishing. Attribution does not guarantee no claims."
+ },
+ "font_poppins": {
+  "asset": "Poppins",
+  "creator": "Indian Type Foundry",
+  "source": "https://fonts.google.com/specimen/Poppins",
+  "license": "SIL Open Font License 1.1",
+  "license_url": "https://openfontlicense.org",
+  "attribution": "",
+  "commercial_youtube": "permitted (fonts may be used in images/videos; OFL)",
+  "used_in": "thumbnails v2"
+ },
+ "font_jetbrains_mono": {
+  "asset": "JetBrains Mono",
+  "creator": "JetBrains",
+  "source": "https://fonts.google.com/specimen/JetBrains+Mono",
+  "license": "SIL Open Font License 1.1",
+  "license_url": "https://openfontlicense.org",
+  "attribution": "",
+  "commercial_youtube": "permitted (OFL)",
+  "used_in": "thumbnails v2"
+ },
+ "tech_live_macleod": {
+  "asset": "Tech Live",
+  "creator": "Kevin MacLeod",
+  "source": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Tech%20Live.mp3",
+  "catalogue": "incompetech pieces.json: 124 BPM, 3:48, Synths/Percussion, 'Bouncy, Grooving'",
+  "license": "Creative Commons Attribution 4.0 (CC BY 4.0)",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "isrc": "USUAN1700030",
+  "commercial_youtube": "permitted with attribution (incompetech FAQ: 'Yes, AND you can monetize the videos. Be sure to credit me.')",
+  "instagram": "CC BY 4.0 s.2(a)(1): worldwide licence for any medium; s.3(a)(2): attribution 'in any reasonable manner based on the medium'. incompetech FAQ does not name Instagram ('for something else? Probably. Be sure to credit me or purchase a license'). Put the credit in the Reel caption. Re-checked 2026-10-22.",
+  "attribution": "\"Tech Live\" Kevin MacLeod (incompetech.com)\nLicensed under Creative Commons: By Attribution 4.0\nhttps://creativecommons.org/licenses/by/4.0/",
+  "content_id_note": "incompetech says its music is pre-registered in Content ID; a claim is released after adding credit and disputing (incompetech.com/music/royalty-free/youtube-contentid.html). Attribution does not guarantee no claims.",
+  "used_in": "lesson01 shorts/short_01_music.mp4, shorts/short_01_v4.mp4 (preview), shorts/v4/short_01..05.mp4",
+  "file": "assets/music/Tech Live.mp3 (unmodified)",
+  "modification": "Excerpted, high-passed at 110 Hz, level-automated 20 dB under the narration and mixed with it. CC BY 4.0 s.3(a)(1)(B) asks to indicate modifications and the incompetech FAQ asks to make clear which parts are yours: the credit line says 'excerpt, mixed under narration'.",
+  "attribution_shorts": "Music: \"Tech Live\" Kevin MacLeod (incompetech.com) (excerpt, mixed under narration)\nLicensed under Creative Commons: By Attribution 4.0\nhttps://creativecommons.org/licenses/by/4.0/"
+ }
+}

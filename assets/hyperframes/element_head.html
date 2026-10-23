@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=1920, height=1080" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script><link rel="stylesheet" href="style.css" />
+<style>
+  .panel { position:absolute; background:rgba(16,24,39,.86); border:1px solid var(--border); border-radius:16px;
+           box-shadow:0 10px 30px rgba(0,0,0,.35); opacity:0; }
+  .acc { position:absolute; left:0; top:18px; bottom:18px; width:6px; border-radius:3px; background:var(--lime); transform-origin:top; }
+  #topic .steps { margin-top:14px; display:flex; flex-direction:column; }
+  #topic .st { height:40px; border-radius:20px; display:flex; align-items:center; justify-content:center; font-weight:600;
+               font-size:21px; background:var(--card); border:1px solid var(--border); color:var(--muted); opacity:0; }
+  #topic .dn { height:16px; display:flex; justify-content:center; opacity:0; }
+  #topic .dn i { width:2px; height:16px; background:var(--lime); transform-origin:top; transform:scaleY(0); }
+  svg { position:absolute; left:0; top:0; } .halo { filter: drop-shadow(0 0 10px currentColor); }
+</style></head><body>
+<div class="stage" id="root" data-composition-id="%(cid)s" data-start="0" data-duration="%(dur)s" data-width="1920" data-height="1080">
+%(body)s
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+  const D = %(dur)s;
+%(js)s
+  window.__timelines["%(cid)s"] = tl; tl.seek(0);
+</script></body></html>

@@ -1,0 +1,11 @@
+{
+  "_help": "Lecture config template: copy to lessons/<id>/video_project_config.json and fill the 3 REQUIRED fields. Every other setting defaults to config/defaults.json; override any of them under 'overrides' with the same section names (project, sync, editing, layout, zoom, color, graphics, captions, transcription, audio, thumbnails, youtube, shorts, output, qa). Check with: python -m ytpipe init --config <file>",
+
+  "face_camera": "PATH_TO_FACE_VIDEO",
+  "desktop_recording": "PATH_TO_DESKTOP_VIDEO",
+  "lecture_topic": "LECTURE_TOPIC",
+
+  "lesson_number": null,
+
+  "overrides": {}
+}

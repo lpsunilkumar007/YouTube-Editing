@@ -1,0 +1,13 @@
+# Python 3.12. Versions are the ones the system was built and tested with on Windows (2026-10-22).
+numpy==2.3.5
+scipy==1.18.1
+pillow==12.3.0
+opencv-python-headless==4.14.0.94
+faster-whisper==1.2.1
+ctranslate2==4.8.3
+jsonschema==4.26.0
+mediapipe==1.1.1
+rembg==2.0.85
+onnxruntime==1.31.0
+pymatting==1.1.16
+pytest==9.0.2

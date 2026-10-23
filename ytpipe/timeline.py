@@ -1,0 +1,77 @@
+"""Stage 'timeline': a PROPOSAL (for user approval) of keep segments and layouts, from measured data only.
+
+keeps   : narration span split at pauses longer than editing.max_dead_air_s; each cut keeps 0.35 s of room tone per side
+          (inside the measured pause), boundaries snapped to the output frame grid.
+restarts: consecutive transcript lines whose first words repeat (possible false start / retake) are FLAGGED, never removed.
+layouts : B while a slide is shown and the presenter writes or the slide changed recently; A for the opening sentence(s),
+          the closing and long stretches without desktop activity; switches only at pauses, min shot length 4 s;
+          A->B switches are placed just after a slide change when one falls in the pause (hides the change).
+zooms   : candidates only (ink concentrated in a small area), each must pass layout clearance checks before use.
+chips/elements/music: empty slots; filled from the transcript (Claude) and approved with the timeline."""
+import json, os, re
+import numpy as np
+
+def snap(t, fps):
+    return round(t * fps) / fps
+
+def keeps(pauses, speech_start, speech_end, max_dead=1.5, keep_side=0.35, fps=30):
+    out, a = [], max(0.0, speech_start - 0.3)
+    for p0, p1 in pauses:
+        if p0 <= a or p1 >= speech_end: continue
+        if p1 - p0 > max_dead:
+            out.append((snap(a, fps), snap(p0 + keep_side, fps))); a = p1 - keep_side
+    out.append((snap(a, fps), snap(speech_end + 0.3, fps)))
+    return [(x, y) for x, y in out if y - x > 0.5]
+
+def restarts(lines, n=2):
+    flags = []
+    for a, b in zip(lines, lines[1:]):
+        wa = re.findall(r"\w+", a["text"].lower())[:n]; wb = re.findall(r"\w+", b["text"].lower())[:n]
+        if wa and wa == wb and b["face"] - a["face"] < 6: flags.append({"face": a["face"], "text": a["text"], "next": b["text"]})
+    return flags
+
+def layouts(keep_list, pauses, slide_changes_face, ink_face, opening_s=12.0, quiet_s=25.0, min_shot=4.0):
+    """Per keep, split into A/B shots at pauses. Activity = ink or slide change within the last quiet_s seconds."""
+    act = sorted(list(slide_changes_face) + [e["start"] for e in ink_face])
+    def active(t): return any(t - quiet_s <= x <= t + 2 for x in act)
+    shots = []
+    for a, b in keep_list:
+        cuts = [a] + [(p0 + p1) / 2 for p0, p1 in pauses if a + min_shot < (p0 + p1) / 2 < b - min_shot] + [b]
+        for x, y in zip(cuts, cuts[1:]):
+            lay = "A" if (x < keep_list[0][0] + opening_s or not active((x + y) / 2)) else "B"
+            if shots and shots[-1]["layout"] == lay and abs(shots[-1]["face_out"] - x) < 1e-6: shots[-1]["face_out"] = y
+            else: shots.append({"layout": lay, "face_in": x, "face_out": y})
+    if shots: shots[-1]["layout"] = "A" if shots[-1]["face_out"] - shots[-1]["face_in"] < 20 else shots[-1]["layout"]
+    merged = []                                     # absorb shots shorter than min_shot into the previous one
+    for s in shots:
+        if merged and s["face_out"] - s["face_in"] < min_shot and abs(merged[-1]["face_out"] - s["face_in"]) < 1e-6:
+            merged[-1]["face_out"] = s["face_out"]
+        else: merged.append(s)
+    return merged
+
+def zoom_candidates(shots, ink_face, area, min_ink=3):
+    out = []
+    for i, s in enumerate(shots):
+        ev = [e for e in ink_face if s["face_in"] <= e["start"] < s["face_out"]]
+        if s["layout"] != "B" or len(ev) < min_ink: continue
+        x0 = min(e["bbox"][0] for e in ev); y0 = min(e["bbox"][1] for e in ev); x1 = max(e["bbox"][2] for e in ev); y1 = max(e["bbox"][3] for e in ev)
+        if (x1 - x0) < 0.6 * area[2]: out.append({"shot": i, "ink_bbox": [x0, y0, x1, y1], "status": "candidate: run clearance check"})
+    return out
+
+def propose(cfg, analysis, lines, offset, out_json):
+    fps = cfg["output"]["fps"]; pauses = [tuple(p) for p in analysis["pauses"]]
+    env = np.load(os.path.join(cfg["paths"]["analysis"], "speech_env.npy")); sp = np.nonzero(env > cfg["editing"]["speech_threshold_dbfs"])[0]
+    start, end = sp[0] * 0.01, sp[-1] * 0.01
+    kl = keeps(pauses, start, end, cfg["editing"]["max_dead_air_s"], 0.35, fps)
+    sc = [t - offset for t in analysis["slide_changes"]]
+    ink = [dict(e, start=e["start"] - offset, end=e["end"] - offset) for e in analysis["ink"]]
+    shots = layouts(kl, pauses, sc, ink)
+    for s in shots:
+        s["face_in"], s["face_out"] = snap(s["face_in"], fps), snap(s["face_out"], fps)
+    area = analysis["slide_area"]
+    plan = {"status": "PROPOSAL - review, edit and approve (python -m ytpipe approve timeline)", "offset_s": offset,
+            "keeps": kl, "segments": shots, "zoom_candidates": zoom_candidates(shots, ink, [area[0], area[1], area[2] - area[0], area[3] - area[1]]),
+            "restart_flags": restarts(lines), "removed_dead_air_s": round(sum(p1 - p0 - 0.7 for p0, p1 in pauses if p1 - p0 > cfg["editing"]["max_dead_air_s"] and start < p0 and p1 < end), 2),
+            "chips": [], "elements": [], "music_sections": "auto: intro, chapter joints, outro", "chapters": []}
+    os.makedirs(os.path.dirname(out_json), exist_ok=True); json.dump(plan, open(out_json, "w"), indent=1)
+    return plan

@@ -1,0 +1,266 @@
+{
+  "project": {
+    "lesson_id": null,
+    "lesson_number": null,
+    "lecture_topic": null,
+    "language": "Hinglish",
+    "channel_name": "{{CHANNEL_NAME}}",
+    "series_name": null,
+    "audience": "beginner to intermediate programming students",
+    "lessons_root": "lessons"
+  },
+  "sources": {
+    "face_camera": null,
+    "desktop_recording": null,
+    "copy_to_lesson_raw": false
+  },
+  "sync": {
+    "method_order": [
+      "metadata",
+      "audio_xcorr",
+      "events"
+    ],
+    "max_uncertainty_s": 0.5,
+    "drift_check_points": 3,
+    "max_drift_ppm": 50,
+    "frame_check_tolerance_frames": 1,
+    "manual_offset_s": null
+  },
+  "editing": {
+    "cut_at": "measured_pauses",
+    "speech_threshold_dbfs": -50,
+    "room_tone_each_side_s": [
+      0.15,
+      0.35
+    ],
+    "joint_crossfade_ms": 20,
+    "max_dead_air_s": 1.5,
+    "frame_grid_snap": true,
+    "standalone_cards": false
+  },
+  "layout": {
+    "canvas": "#101827",
+    "card_radius": 14,
+    "card_margin": 24,
+    "chip_band": 106,
+    "camera": {
+      "shape": "circle",
+      "diameter": 368,
+      "position": "lower-right",
+      "margin": 24,
+      "ring": "#E2E8F0",
+      "ring_px": 2,
+      "ring_opacity": 0.85,
+      "crop_square": 756,
+      "face_center_y": 0.42,
+      "crop_mode": "fixed_per_take"
+    },
+    "slide_area": "auto",
+    "counter": "auto"
+  },
+  "zoom": {
+    "enabled": true,
+    "range": [
+      1.2,
+      1.5
+    ],
+    "max": 1.7,
+    "ease_s": 0.6,
+    "require_clearance": true
+  },
+  "color": {
+    "face_pipeline": "auto",
+    "libplacebo": "tonemapping=bt.2390:apply_dolbyvision=1:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv",
+    "grade": "none"
+  },
+  "graphics": {
+    "engine": "hyperframes",
+    "kinds": [
+      "title",
+      "topic",
+      "term",
+      "ipo",
+      "rings",
+      "end"
+    ],
+    "chips": true,
+    "counter_badge": true,
+    "palette": {
+      "canvas": "#101827",
+      "card": "#1E293B",
+      "text": "#F8FAFC",
+      "lime": "#A3E635",
+      "cyan": "#38BDF8",
+      "muted": "#94A3B8",
+      "border": "#334155"
+    },
+    "font_bold": "C:/Windows/Fonts/segoeuib.ttf",
+    "font_semibold": "C:/Windows/Fonts/seguisb.ttf"
+  },
+  "captions": {
+    "enabled": true,
+    "format": [
+      "srt"
+    ],
+    "styled_burn_in": false,
+    "max_chars_per_line": 42,
+    "max_lines": 2,
+    "min_duration_s": 1.0,
+    "max_duration_s": 6.0,
+    "min_gap_s": 0.08,
+    "glossary": "config/glossary.json"
+  },
+  "transcription": {
+    "engine": "faster-whisper",
+    "model": "medium",
+    "compute_type": "int8",
+    "language": "hi",
+    "word_timestamps": true,
+    "vad": true
+  },
+  "audio": {
+    "narration_lufs_mono": -19.0,
+    "delivery_lufs": -16.0,
+    "true_peak_dbtp": -1.5,
+    "chain": "highpass=f=80,volume=16dB,acompressor=threshold=-24dB:ratio=2:knee=6:attack=15:release=250:makeup=1,alimiter=limit=0.70:attack=5:release=80:level=0:latency=1",
+    "music": {
+      "enabled": true,
+      "file": "_work/music_dl/Sincerely.mp3",
+      "credit_id": "sincerely_macleod",
+      "placement": [
+        "intro",
+        "chapter_breaks",
+        "outro"
+      ],
+      "below_voice_db": [
+        25,
+        35
+      ],
+      "duck_db": 6
+    },
+    "sfx": {
+      "enabled": true
+    }
+  },
+  "thumbnails": {
+    "size": [
+      1280,
+      720
+    ],
+    "options": 3,
+    "safe_margin": 64,
+    "min_text_px_at_quarter": 13,
+    "engine": "html_v2",
+    "layouts": [
+      "premium",
+      "concept",
+      "curious"
+    ],
+    "headline_words_max": 5,
+    "segmentation": "birefnet-portrait x u2net_human_seg (person only) + pymatting foreground",
+    "face_cutout": "rembg",
+    "face_analysis_fps": 1.0,
+    "background": "#0C1525",
+    "fonts": {
+      "headline": "Poppins 900 (OFL, Google Fonts)",
+      "mono": "JetBrains Mono 700 (OFL, Google Fonts)"
+    },
+    "frame_sample_every_s": 2.0
+  },
+  "youtube": {
+    "title_options": 5,
+    "max_title_chars": 70,
+    "tags_max_chars": 500,
+    "hashtags_max": 5,
+    "links": {
+      "website": "{{WEBSITE_URL}}",
+      "playlist": "{{PLAYLIST_URL}}",
+      "instagram": "{{INSTAGRAM_URL}}"
+    },
+    "credits": "config/credits.json"
+  },
+  "shorts": {
+    "enabled": true,
+    "max_candidates": 5,
+    "duration_s": [
+      20,
+      60
+    ],
+    "allow_up_to_s": 90,
+    "size": [
+      1080,
+      1920
+    ],
+    "fps": 30,
+    "require_approval": true,
+    "renderer": "v3",
+    "camera_overlay": "none (circular PiP is long-form only)",
+    "layouts": {
+      "B_full_frame_presenter": "9:16 crop of the original camera, face centred",
+      "A_split": "desktop full width on top (>= 55 % of usable height, content-fitted), caption band, presenter rectangle below",
+      "C_desktop_focus": "zoom on concentrated writing/code (<= 45 % of slide width), edges snapped between cards, presenter hidden"
+    },
+    "usable_height": 1480,
+    "caption_bottom": 1470,
+    "right_ui_margin": 190,
+    "min_part_s": 3.0,
+    "zoom_min_source_width": 700,
+    "highlight_terms": true,
+    "v4": {
+      "_approved": "2026-10-22 (Short 01 v4 review): narration-first pacing, chunk captions, Tech Live music, guided split; no extra presenter zoom",
+      "pause_min_s": 0.35,
+      "pause_keep_s": 0.25,
+      "captions": "2-4 word chunks of the reviewed SRT; Segoe UI Black 68, white, black outline, glossary terms lime; hard switches, no animation",
+      "music": "assets/music/Tech Live.mp3",
+      "music_bpm": 124,
+      "music_db_under_voice": 20.0,
+      "music_credit": "tech_live_macleod (config/credits.json)",
+      "sound_effects": "none",
+      "presenter_zoom": "none beyond the approved crops (B 608x1080 -> 1080x1920; A rectangle)",
+      "hook_title": "optional, max 2 s at the start, never over the face, must restate the spoken hook; off by default",
+      "guided_split": {
+        "enabled": true,
+        "desktop_box": [
+          1080,
+          900
+        ],
+        "caption_band_px": 130,
+        "min_crop_source_w": 900,
+        "min_shot_s": 4.0,
+        "signals": "new pen ink of the line + slide words named by the line (Windows OCR, offline)",
+        "reframe": "hard cut in a measured pause; presenter rectangle fixed per part"
+      }
+    }
+  },
+  "output": {
+    "resolution": [
+      1920,
+      1080
+    ],
+    "fps": 30,
+    "x264": [
+      "-c:v",
+      "libx264",
+      "-preset",
+      "slow",
+      "-crf",
+      "12",
+      "-bf",
+      "0",
+      "-x264-params",
+      "mbtree=0"
+    ],
+    "audio_codec": [
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k"
+    ],
+    "overwrite_finals": false
+  },
+  "qa": {
+    "decode_check": true,
+    "pre_render_frame_check": true,
+    "joint_qc_on_narration_stem": true
+  }
+}

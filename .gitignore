@@ -1,0 +1,62 @@
+# mc_yourtubeEdit (Mac copy): what goes into the repository
+#
+# PUSHED: the ytpipe code, tests, config, templates, docs, requirements.txt,
+# assets (licences in config/credits.json), the HyperFrames setup in _work/hf
+# (package.json, package-lock.json, tpl/) and _work/music_dl/Sincerely.mp3
+# (CC BY, used by config/defaults.json).
+#
+# NOT PUSHED: recordings, renders, lesson media and anything regenerable.
+
+# --- Recordings and renders (new lessons go in lessons/<id>/) ---
+raw/
+lessons/*/raw/
+output/
+lessons/*/full_video/
+lessons/**/*.mp4
+lessons/**/*.mov
+lessons/**/*.mkv
+lessons/**/*.wav
+lessons/**/*.mp3
+lessons/**/*.m4a
+lessons/**/*.png
+lessons/**/*.jpg
+lessons/**/*.jpeg
+lessons/**/*.npy
+
+# --- _work: keep only the HyperFrames setup and the long-form music ---
+/_work/*
+!/_work/hf/
+/_work/hf/*
+!/_work/hf/package.json
+!/_work/hf/package-lock.json
+!/_work/hf/tpl/
+!/_work/music_dl/
+/_work/music_dl/*
+!/_work/music_dl/Sincerely.mp3
+
+# --- Test fixtures: synthetic, regenerate with `python tests/make_fixtures.py` ---
+tests/fixtures/
+tests/last_run.txt
+
+# --- HyperFrames / Node ---
+node_modules/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- Editors and OS ---
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Secrets (none today; keep any future keys out) ---
+.env
+*.key
