@@ -72,8 +72,8 @@ def _ass(cfg, cues, path, title):
     head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\n\n[V4+ Styles]\n"
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
             "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-            f"Style: Cap,Segoe UI Semibold,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H40251510,0,0,0,0,100,100,0,0,3,16,0,2,70,190,{mv},1\n"
-            "Style: Hook,Segoe UI Black,70,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,3,8,70,190,120,1\n\n"
+            f"Style: Cap,Poppins SemiBold,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H40251510,0,0,0,0,100,100,0,0,3,16,0,2,70,190,{mv},1\n"
+            "Style: Hook,Poppins Black,70,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,3,8,70,190,120,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ts = lambda t: f"{int(t // 3600)}:{int(t // 60 % 60):02d}:{max(0, t) % 60:05.2f}"
     with open(path, "w", encoding="utf-8") as f:

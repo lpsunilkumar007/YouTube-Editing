@@ -18,7 +18,7 @@
   "license_url": "https://openfontlicense.org",
   "attribution": "",
   "commercial_youtube": "permitted (fonts may be used in images/videos; OFL)",
-  "used_in": "thumbnails v2"
+  "used_in": "thumbnails v2, thumbnails v1, graphics, captions, Shorts captions (assets/fonts, OFL.txt alongside)"
  },
  "font_jetbrains_mono": {
   "asset": "JetBrains Mono",
@@ -28,7 +28,7 @@
   "license_url": "https://openfontlicense.org",
   "attribution": "",
   "commercial_youtube": "permitted (OFL)",
-  "used_in": "thumbnails v2"
+  "used_in": "thumbnails v2, thumbnails v1, graphics, captions, Shorts captions (assets/fonts, OFL.txt alongside)"
  },
  "tech_live_macleod": {
   "asset": "Tech Live",

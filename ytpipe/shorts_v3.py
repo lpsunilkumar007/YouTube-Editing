@@ -83,9 +83,9 @@ def _ass(cues, path, layout, glossary_terms, band_bottom=None, style="line"):
     if layout == "A": mv, al = H - (band_bottom or G["A"]["cap_band"][1]) + (8 if style == "line" else 30), 2
     elif layout == "C": mv, al = H - G["C"]["cap_band"][1], 2
     else: mv, al = H - G["B"]["cap_bottom"], 2
-    st = (f"Style: Cap,Segoe UI Semibold,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H40251510,0,0,0,0,100,100,0,0,3,14,0,{al},70,190,{mv},1\n\n"
+    st = (f"Style: Cap,Poppins SemiBold,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H40251510,0,0,0,0,100,100,0,0,3,14,0,{al},70,190,{mv},1\n\n"
           if style == "line" else      # chunk: 2-4 words, bold white, black outline + soft shadow, no box, centred clear of the UI
-          f"Style: Cap,Segoe UI Black,68,&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,5,3,{al},190,190,{mv},1\n\n")
+          f"Style: Cap,Poppins Black,68,&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,5,3,{al},190,190,{mv},1\n\n")
     head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\n\n[V4+ Styles]\n"
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
             "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"

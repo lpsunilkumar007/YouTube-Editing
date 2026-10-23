@@ -94,8 +94,9 @@
       "muted": "#94A3B8",
       "border": "#334155"
     },
-    "font_bold": "C:/Windows/Fonts/segoeuib.ttf",
-    "font_semibold": "C:/Windows/Fonts/seguisb.ttf"
+    "font_black": "assets/fonts/Poppins-Black.ttf",
+    "font_bold": "assets/fonts/Poppins-Bold.ttf",
+    "font_semibold": "assets/fonts/Poppins-SemiBold.ttf"
   },
   "captions": {
     "enabled": true,
