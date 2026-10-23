@@ -14,7 +14,7 @@ HF_INSTALL = os.path.join(ROOT, "_work", "hf")
 CHIP_PT, LEAD_PT, CHIP_H, CNT_PT, CNT_H = 26, 22, 48, 23, 42
 
 def _f(cfg, kind, pt):
-    return ImageFont.truetype(cfg["graphics"]["font_bold" if kind == "bold" else "font_semibold"], pt)
+    return ImageFont.truetype(os.path.join(ROOT, cfg["graphics"]["font_bold" if kind == "bold" else "font_semibold"]), pt)
 
 def bar_state(cfg, wh, lead, chips, active):
     p = cfg["graphics"]["palette"]; im = Image.new("RGBA", tuple(wh), (0, 0, 0, 0)); d = ImageDraw.Draw(im)

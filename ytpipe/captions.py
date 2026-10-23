@@ -116,13 +116,13 @@ def write_srt(cues, path):
             f.write(f"{i}\n{_ts(a)} --> {_ts(b)}\n{t}\n\n")
 
 def write_ass(cues, path, cfg):
-    """Optional styled captions (Segoe UI Semibold, white on translucent navy, above the chip band)."""
+    """Optional styled captions (Poppins SemiBold, white on translucent navy, above the chip band)."""
     W, H = cfg["output"]["resolution"]; pal = cfg["graphics"]["palette"]
     navy = pal["canvas"].lstrip("#"); bgr = navy[4:6] + navy[2:4] + navy[0:2]
     head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\n\n[V4+ Styles]\n"
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, "
             "StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-            f"Style: Cap,Segoe UI Semibold,{int(40 * H / 1080)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H28{bgr},0,0,0,0,100,100,0,0,3,10,0,2,"
+            f"Style: Cap,Poppins SemiBold,{int(40 * H / 1080)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H28{bgr},0,0,0,0,100,100,0,0,3,10,0,2,"
             f"{int(80 * W / 1920)},{int(460 * W / 1920)},{int(120 * H / 1080)},1\n\n[Events]\n"
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ts = lambda t: f"{int(t // 3600)}:{int(t // 60 % 60):02d}:{t % 60:05.2f}"

@@ -10,11 +10,12 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from . import media
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 W, H, SS = 1280, 720, 2                        # render at 2x, downscale (clean edges)
 
 def _font(cfg, kind, px):
-    f = {"black": "C:/Windows/Fonts/seguibl.ttf", "bold": cfg["graphics"]["font_bold"], "semi": cfg["graphics"]["font_semibold"]}[kind]
-    return ImageFont.truetype(f, int(px * SS))
+    f = {"black": cfg["graphics"]["font_black"], "bold": cfg["graphics"]["font_bold"], "semi": cfg["graphics"]["font_semibold"]}[kind]
+    return ImageFont.truetype(os.path.join(ROOT, f), int(px * SS))
 
 def face_frame_chain(meta_pipeline, cfg):
     if meta_pipeline == "libplacebo":
@@ -59,7 +60,7 @@ def candidates(cfg, edl, env=None, pipeline="libplacebo", every=None, top=6, lay
     if picked:                                        # contact sheet so the user can pin a frame (frame_t) per option
         tiles = [Image.open(c["file"]).resize((480, 270)) for c in picked]; sheet = Image.new("RGB", (480 * 3, 270 * ((len(tiles) + 2) // 3)))
         for i, t in enumerate(tiles):
-            ImageDraw.Draw(t).text((10, 8), f"F {c_t(picked[i])}", fill="white", font=ImageFont.truetype(cfg["graphics"]["font_bold"], 22))
+            ImageDraw.Draw(t).text((10, 8), f"F {c_t(picked[i])}", fill="white", font=ImageFont.truetype(os.path.join(ROOT, cfg["graphics"]["font_bold"]), 22))
             sheet.paste(t, (480 * (i % 3), 270 * (i // 3)))
         sheet.save(os.path.join(out, "candidates_sheet.png"))
     return picked

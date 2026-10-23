@@ -42,6 +42,6 @@ This project produces technical teaching videos (Hinglish) and their publishing 
 - **Records:** keep decisions in lesson files and reports.
 
 ## Machine
-- **This copy is for macOS** (copied from the Windows project on 2026-10-22). Setup, and the Windows-specific pieces still to port (slide OCR, fonts, libplacebo/Vulkan colour, paths), are in [MAC_SETUP.md](MAC_SETUP.md). Check those before trusting any render.
+- **This copy is for macOS** (copied from the Windows project on 2026-10-22). Setup and the status of the Windows-specific pieces are in [MAC_SETUP.md](MAC_SETUP.md). Fonts (Poppins) and libplacebo/Vulkan colour are ported (2026-10-23); slide OCR is not. Caption sizes and HDR colour still need checking against Lesson 01 in the first real render.
 - **Lesson 01 is not in this copy.** The rule above protects the Windows original.
 - **Windows original, for reference:** Windows 11, i7-8650U, 8 GB RAM, Intel UHD 620 (Vulkan for libplacebo); ffmpeg 9 (libplacebo), Node 22, HyperFrames 0.8.181 in `_work\hf`, Python 3.12 (`requirements.txt`).
