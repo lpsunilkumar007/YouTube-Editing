@@ -26,7 +26,9 @@ def bar_state(cfg, wh, lead, chips, active):
                             outline=None if on else p["border"], width=1)
         d.text((x + cw // 2, cy + 1), c, font=fc, fill=p["canvas"] if on else p["muted"], anchor="mm"); x += cw
         if i < len(chips) - 1:
-            d.text((x + 18, cy), "→", font=fc, fill=p["muted"], anchor="mm"); x += 36
+            ax = x + 18                                   # drawn arrow: Poppins has no "→" glyph
+            d.line([(ax - 8, cy), (ax + 6, cy)], fill=p["muted"], width=2)
+            d.polygon([(ax + 9, cy), (ax + 2, cy - 5), (ax + 2, cy + 5)], fill=p["muted"]); x += 36
     if x >= wh[0]:
         raise ValueError(f"chip row '{lead}: {chips}' is {x}px, wider than the bar ({wh[0]}px): shorten the labels")
     return np.asarray(im).astype(np.float32)

@@ -27,22 +27,48 @@ def desk_filter(g, T, fps, zoom=None, ease=0.6):
 
 def face_filter(cfg, pipeline, w, h, crop=None, fmt="yuv420p"):
     """Approved HDR path (libplacebo + Dolby Vision, crop+downscale in one pass) or plain SDR scaling."""
+    if crop:                                          # [x, y, size] (square) or [x, y, w, h], in source pixels
+        cw, ch = crop[2], crop[3] if len(crop) > 3 else crop[2]
     if pipeline == "libplacebo":
-        c = f":crop_x={crop[0]}:crop_y={crop[1]}:crop_w={crop[2]}:crop_h={crop[2]}:downscaler=ewa_lanczos" if crop else ""
+        c = f":crop_x={crop[0]}:crop_y={crop[1]}:crop_w={cw}:crop_h={ch}:downscaler=ewa_lanczos" if crop else ""
         return f"libplacebo={cfg['color']['libplacebo']}:w={w}:h={h}{c}:format={fmt}"
-    c = f"crop={crop[2]}:{crop[2]}:{crop[0]}:{crop[1]}," if crop else ""
+    c = f"crop={cw}:{ch}:{crop[0]}:{crop[1]}," if crop else ""
     return f"{c}scale={w}:{h}:flags=lanczos,format={fmt}"
 
-def fixed_crop(cfg, face_track, a, b, src_w=1920, src_h=1080):
-    """Whole-pixel crop for one continuous take: median face position, face centre at face_center_y (no moving crops)."""
+def _face_median(face_track, a, b, src_w, src_h):
+    """Median face centre in a take, in source pixels (face_track is in 1920x1080 frame space, see analyze.face_track)."""
     import numpy as np
-    c = cfg["layout"]["camera"]; S = c["crop_square"]
-    if face_track is not None and len(face_track):
-        m = (face_track[:, 0] >= a) & (face_track[:, 0] <= b) & ~np.isnan(face_track[:, 1])
-        if m.sum():
-            cx, cy = np.median(face_track[m, 1]), np.median(face_track[m, 2])
-            return [int(round(min(max(0, cx - S / 2), src_w - S))), int(round(min(max(0, cy - c["face_center_y"] * S), src_h - S))), S]
+    if face_track is None or not len(face_track): return None
+    m = (face_track[:, 0] >= a) & (face_track[:, 0] <= b) & ~np.isnan(face_track[:, 1])
+    if not m.sum(): return None
+    return np.median(face_track[m, 1]) * src_w / 1920, np.median(face_track[m, 2]) * src_h / 1080
+
+def fixed_crop(cfg, face_track, a, b, src_w=1920, src_h=1080):
+    """Whole-pixel crop for one continuous take: median face position, face centre at face_center_y (no moving crops).
+    crop_square is for a 1080-high source and scales with the source height."""
+    c = cfg["layout"]["camera"]; S = int(round(c["crop_square"] * src_h / 1080))
+    f = _face_median(face_track, a, b, src_w, src_h)
+    if f:
+        cx, cy = f
+        return [int(round(min(max(0, cx - S / 2), src_w - S))), int(round(min(max(0, cy - c["face_center_y"] * S), src_h - S))), S]
     return [(src_w - S) // 2, max(0, (src_h - S) // 3), S]
+
+def wide_crop(path, W=1920, H=1080):
+    """Centre crop [x, 0, w, h] to W:H for a source wider than the output (displayed pixels), else None. For stills and
+    face analysis, so their frames and face boxes are not stretched (face-centred crops: frame_crop)."""
+    v = next(s for s in media.probe(path)["streams"] if s["codec_type"] == "video"); w, h = v["width"], v["height"]
+    rot = next((d.get("rotation", 0) for d in v.get("side_data_list", []) if "rotation" in d), 0)
+    if abs(rot) == 90: w, h = h, w
+    cw = int(round(h * W / H / 2)) * 2
+    return [(w - cw) // 2, 0, cw, h] if cw < w - 2 else None
+
+def frame_crop(face_track, a, b, src_w, src_h, W=1920, H=1080):
+    """Layout A for a source wider than the output (e.g. 2864x1322): full height, sides cropped to W:H around the
+    median face of the shot (fixed per shot). None when the source already has the output's aspect ratio."""
+    cw = int(round(src_h * W / H / 2)) * 2
+    if cw >= src_w - 2: return None
+    f = _face_median(face_track, a, b, src_w, src_h); cx = f[0] if f else src_w / 2
+    return [int(round(min(max(0, cx - cw / 2), src_w - cw))), 0, cw, src_h]
 
 def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, badges=(), elements=(), focus=None):
     """seg = {layout, face_in, face_out, zoom?}. bar = (mov, start_face_time). badges = [(png, x, y, t0, t1)] local times.
@@ -53,7 +79,7 @@ def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, bad
     aud = f"[0:a]pan=mono|c0=c0,aresample=48000[a]"
     inputs = ["-ss", f"{a:.4f}", "-t", f"{T}", "-i", face]; rgb = "scale=out_color_matrix=bt709:out_range=tv"
     if seg["layout"] == "A":
-        fc = f"[0:v]fps={fps},{face_filter(cfg, pipeline, W, H, fmt='yuv444p')},setsar=1[s0];"; prev = "s0"; n = 1
+        fc = f"[0:v]fps={fps},{face_filter(cfg, pipeline, W, H, crop, 'yuv444p')},setsar=1[s0];"; prev = "s0"; n = 1
     else:
         d = g["camera"][2]; cx, cy, cw, ch = g["card"]
         inputs += ["-ss", f"{a + offset:.4f}", "-t", f"{T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
