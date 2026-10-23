@@ -65,9 +65,14 @@ def cutout(frame_png, face_box, out_png, crop="bust"):
     return out_png, ff
 
 # ---------------------------------------------------------------- shared look
+_FONTS = "file:///" + os.path.join(ROOT, "assets", "fonts").replace(os.sep, "/").lstrip("/")   # local OFL fonts: no network per render
 BASE_CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=JetBrains+Mono:wght@600;700&display=block');
-*{margin:0;padding:0;box-sizing:border-box}
+@font-face{font-family:'Poppins';font-weight:600;font-display:block;src:url('%(f)s/Poppins-SemiBold.ttf')}
+@font-face{font-family:'Poppins';font-weight:700;font-display:block;src:url('%(f)s/Poppins-Bold.ttf')}
+@font-face{font-family:'Poppins';font-weight:900;font-display:block;src:url('%(f)s/Poppins-Black.ttf')}
+@font-face{font-family:'Poppins';font-weight:800;font-display:block;src:url('%(f)s/Poppins-Black.ttf')}
+@font-face{font-family:'JetBrains Mono';font-weight:100 800;font-display:block;src:url('%(f)s/JetBrainsMono-wght.ttf')}
+*{margin:0;padding:0;box-sizing:border-box}""" % {"f": _FONTS} + """
 html,body{width:1280px;height:720px;overflow:hidden;background:#0C1525}
 body{font-family:'Poppins','Segoe UI',sans-serif;color:#F8FAFC;position:relative}
 .abs{position:absolute}
@@ -190,8 +195,120 @@ def page_curious(o, person):
             html_screen(o["screen"]).replace('class="screen"', f'class="screen" style="left:{left + 10}px"'))
     return body, face, "--lx:20%;--ly:45%;--gx:96%;--gy:8%"
 
+# ---------------------------------------------------------------- v3 layouts (research-based, 2026-10-23; THUMBNAIL_STYLE.md)
+# One idea per thumbnail, 2-4 huge words that ADD to the title, a large face with eye contact, one visual that shows the
+# payoff or a wrong-vs-right contrast. Colour: white + a yellow highlight block for the key word; red = wrong, lime = right.
+V3_CSS = """.big{font-weight:900;text-transform:uppercase;letter-spacing:-.025em;line-height:.9;color:#FFFFFF;
+  -webkit-text-stroke:3px #0B1220;paint-order:stroke fill;text-shadow:0 8px 0 rgba(0,0,0,.35),0 14px 34px rgba(0,0,0,.5)}
+.mark{display:inline-block;background:#FACC15;color:#0B1220;-webkit-text-stroke:0;text-shadow:none;padding:2px 18px 6px;
+  border-radius:12px;transform:rotate(-2deg);box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.tile{position:absolute;border-radius:22px;background:#0F172A;box-shadow:0 22px 48px rgba(0,0,0,.5)}
+.badge{position:absolute;width:74px;height:74px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font:900 50px Poppins;color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.45);border:4px solid #0B1220}"""
+
+def _big(lines, mark, left, top, size):
+    """Headline lines; words in `mark` sit on the yellow highlight block (the one key word)."""
+    mk = {m.upper().strip("?!.,") for m in mark}; rows = []
+    for ln in lines:
+        ws = [f'<span class="mark">{_h.escape(w)}</span>' if w.upper().strip("?!.,") in mk else _h.escape(w) for w in ln.split(" ")]
+        rows.append(f'<div data-qa="text" style="display:inline-block;white-space:nowrap;margin-bottom:10px">{" ".join(ws)}</div><br>')
+    return f'<div class="abs big" data-qa="headline" style="left:{left}px;top:{top}px;font-size:{size}px">{"".join(rows)}</div>'
+
+def svg_mini_flow(stroke="#A3E635", w=200, h=190, hand=False):
+    """Tiny flowchart (start oval -> decision diamond -> box); hand=True draws it like pen ink (round joins, slight wobble)."""
+    sw = 7 if hand else 6; j = 'stroke-linecap="round" stroke-linejoin="round"'
+    return (f'<svg width="{w}" height="{h}" viewBox="0 0 200 190" fill="none" stroke="{stroke}" stroke-width="{sw}" {j}>'
+            '<ellipse cx="100" cy="22" rx="46" ry="17"/><path d="M100 40 V58"/><path d="M92 52 L100 60 L108 52"/>'
+            '<path d="M100 62 L142 92 L100 122 L58 92 Z"/><path d="M100 124 V140"/><path d="M92 134 L100 142 L108 134"/>'
+            '<rect x="54" y="144" width="92" height="38" rx="5"/></svg>')
+
+def page_versus(o, person):
+    """Wrong vs right: code (red x) -> flowchart (lime check). Headline top-left, large face right."""
+    src, ff = person; im = Image.open(src); h = o.get("person_h", 640); w = h * im.width / im.height
+    tag, face, pb = _person(src, ff, 1280 - w + 60 + o.get("person_dx", 0), 720, h)
+    code = ('<div style="font:700 25px \'JetBrains Mono\';color:#94A3B8;line-height:1.4;padding:28px 0 0 22px;white-space:nowrap">'
+            'if (x &gt; 0) {<br>&nbsp;&nbsp;print(x);<br>}<br>for (i=0;...</div>')
+    body = (f'<style>{V3_CSS}</style>'
+            f'<div class="backlight" style="left:{pb[0] + 40:.0f}px;top:90px;width:520px;height:520px;background:rgba(250,204,21,.22)"></div>'
+            f'<div class="tile" style="left:64px;top:372px;width:250px;height:240px;border:4px solid #EF4444;opacity:.92">{code}</div>'
+            '<div class="badge" style="left:268px;top:338px;background:#EF4444">&#10005;</div>'
+            '<svg class="abs" style="left:322px;top:458px" width="70" height="60"><path d="M6 30 H52 M38 14 L56 30 L38 46" stroke="#F8FAFC" '
+            'stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            f'<div class="tile" style="left:398px;top:372px;width:250px;height:240px;border:4px solid #A3E635;display:flex;align-items:center;'
+            f'justify-content:center">{svg_mini_flow()}</div>'
+            '<div class="badge" style="left:604px;top:338px;background:#65A30D">&#10003;</div>'
+            f'{tag}' + _big(o["headline"], o.get("mark", ()), 64, 64, o.get("size", 104)))
+    return body, face, "--lx:80%;--ly:40%;--gx:10%;--gy:96%"
+
+def page_journey(o, person):
+    """The course path as 4 nodes (0 -> flowchart -> C# -> app); headline top-left, large face right."""
+    src, ff = person; im = Image.open(src); h = o.get("person_h", 640); w = h * im.width / im.height
+    tag, face, pb = _person(src, ff, 1280 - w + 60 + o.get("person_dx", 0), 720, h)
+    nodes = o.get("nodes", ["0", "flow", "C#", "app"]); xs = [64, 222, 380, 538]; out = []
+    for i, (x, n) in enumerate(zip(xs, nodes)):
+        last = i == len(nodes) - 1; col = "#A3E635" if last else ("#FACC15" if i == 0 else "#38BDF8")
+        if n == "flow": inner = svg_mini_flow(col, 96, 92)
+        elif n == "app": inner = ('<svg width="96" height="84" viewBox="0 0 96 84" fill="none" stroke="#A3E635" stroke-width="6" stroke-linejoin="round">'
+                                  '<rect x="4" y="4" width="88" height="76" rx="8"/><path d="M4 22 H92"/><circle cx="16" cy="13" r="3" fill="#A3E635"/>'
+                                  '<path d="M28 52 L42 64 L68 38" stroke-linecap="round"/></svg>')
+        else: inner = f'<div data-qa="text" style="font:900 {74 if len(n) < 2 else 60}px Poppins;color:{col}">{_h.escape(n)}</div>'
+        out.append(f'<div class="tile" style="left:{x}px;top:420px;width:132px;height:132px;border:4px solid {col};display:flex;'
+                   f'align-items:center;justify-content:center">{inner}</div>')
+        if not last:
+            out.append(f'<svg class="abs" style="left:{x + 134}px;top:470px" width="24" height="32"><path d="M4 4 L18 16 L4 28" stroke="#F8FAFC" '
+                       'stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+    body = (f'<style>{V3_CSS}</style><div class="backlight" style="left:{pb[0] + 40:.0f}px;top:90px;width:520px;height:520px;background:rgba(163,230,53,.22)"></div>'
+            + "".join(out) + f'{tag}' + _big(o["headline"], o.get("mark", ()), 64, 70, o.get("size", 118)))
+    return body, face, "--lx:80%;--ly:40%;--gx:10%;--gy:96%"
+
+def page_paper(o, person):
+    """Copy-and-pen first: a notebook page with a hand-drawn flowchart in red pen; face left, headline right."""
+    src, ff = person; im = Image.open(src); h = o.get("person_h", 640); w = h * im.width / im.height
+    tag, face, pb = _person(src, ff, -60 + o.get("person_dx", 0), 720, h)
+    left = max(640, int(face[2] + 0.35 * (face[2] - face[0]) + 40))
+    paper = ('<div class="abs" style="left:{l}px;top:300px;width:330px;height:340px;background:#FFFDF5;border-radius:10px;transform:rotate(4deg);'
+             'box-shadow:0 26px 50px rgba(0,0,0,.5);background-image:repeating-linear-gradient(#FFFDF5 0 38px,#BFDBFE 38px 40px);'
+             'border-left:6px solid #FCA5A5;display:flex;align-items:center;justify-content:center">{flow}</div>').format(l=left + 20, flow=svg_mini_flow("#DC2626", 250, 238, hand=True))
+    pen = (f'<svg class="abs" style="left:{left + 300}px;top:500px;transform:rotate(-35deg)" width="190" height="34"><rect x="0" y="6" width="150" height="22" rx="6" fill="#1D4ED8"/>'
+           '<path d="M150 6 L186 17 L150 28 Z" fill="#E5E7EB"/><path d="M178 14.5 L186 17 L178 19.5 Z" fill="#DC2626"/><rect x="18" y="2" width="8" height="30" rx="3" fill="#94A3B8"/></svg>')
+    body = (f'<style>{V3_CSS}</style><div class="backlight" style="left:0;top:110px;width:560px;height:560px;background:rgba(250,204,21,.20)"></div>'
+            f'{tag}{paper}{pen}' + _big(o["headline"], o.get("mark", ()), left, 64, o.get("size", 104)))
+    return body, face, "--lx:22%;--ly:45%;--gx:96%;--gy:8%"
+
+def page_stairs(o, person):
+    """Basic -> advanced as a staircase of the course stages (`steps`, low to high); headline top-left, large face right."""
+    src, ff = person; im = Image.open(src); h = o.get("person_h", 540); w = h * im.width / im.height
+    tag, face, pb = _person(src, ff, 1280 - w + 60 + o.get("person_dx", 0), 720, h)
+    steps = o["steps"]; n = len(steps); sw, base, rise = 156, 662, 78
+    cols = ["#38BDF8", "#22D3EE", "#A3E635", "#FACC15"][-n:] if n <= 4 else ["#38BDF8"] * (n - 2) + ["#A3E635", "#FACC15"]
+    out = []
+    for i, (lab, col) in enumerate(zip(steps, cols)):
+        x, top = 64 + i * (sw + 6), base - (i + 1) * rise
+        fs = 48 if len(lab) <= 3 else 24; ic = (o.get("icons") or [""] * n)[i]
+        icon = (svg_mini_flow(col, 72, 68) if ic == "flow" else
+                ''.join(f'<span style="display:inline-block;width:26px;height:26px;margin:0 2px;border:4px solid {col};border-radius:4px"></span>' for _ in range(3)) if ic == "array" else
+                f'<svg width="74" height="62" viewBox="0 0 96 84" fill="none" stroke="{col}" stroke-width="7" stroke-linejoin="round"><rect x="4" y="4" width="88" height="76" rx="8"/>'
+                f'<path d="M4 22 H92"/><path d="M28 52 L42 64 L68 38" stroke-linecap="round"/></svg>' if ic == "app" else "")
+        out.append(f'<div class="abs" style="left:{x}px;top:{top}px;width:{sw}px;height:{base - top}px;border-radius:14px 14px 4px 4px;'
+                   f'background:linear-gradient(180deg,{col} 0 12px,#13213A 12px 100%);box-shadow:0 18px 40px rgba(0,0,0,.45),inset 0 0 0 2px {col}55;'
+                   f'display:flex;flex-direction:column;align-items:center;gap:12px">'
+                   f'<div style="margin-top:20px;text-align:center;font:800 {fs}px/1.05 Poppins;color:{col};padding:0 6px;letter-spacing:-.01em">{_h.escape(lab)}</div>'
+                   f'{"<div>" + icon + "</div>" if icon and base - top > 2 * rise else ""}</div>')
+    sx = 64 + (n - 1) * (sw + 6) + sw / 2; sy = base - n * rise - 58
+    star = (f'<svg class="abs" style="left:{sx - 34:.0f}px;top:{sy:.0f}px" width="68" height="64" viewBox="0 0 24 23">'
+            '<path d="M12 1l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.1 5.6 20.6 7 13.5 1.7 8.5l7.2-.9z" fill="#FACC15" stroke="#0B1220" stroke-width="1.2"/></svg>')
+    arrow = (f'<svg class="abs" style="left:40px;top:{base - n * rise - 40}px" width="{n * (sw + 6)}" height="{n * rise + 20}">'
+             f'<path d="M30 {n * rise + 4} Q {n * (sw + 6) * 0.45:.0f} {n * rise * 0.55:.0f} {n * (sw + 6) - 70} 30" stroke="#F8FAFC" stroke-opacity=".55" '
+             'stroke-width="5" fill="none" stroke-dasharray="2 14" stroke-linecap="round"/></svg>')
+    body = (f'<style>{V3_CSS}</style><div class="backlight" style="left:{pb[0] + 40:.0f}px;top:90px;width:520px;height:520px;background:rgba(250,204,21,.20)"></div>'
+            + arrow + "".join(out) + star + f'{tag}' + _big(o["headline"], o.get("mark", ()), 64, 56, o.get("size", 100)))
+    return body, face, "--lx:80%;--ly:40%;--gx:10%;--gy:96%"
+
+V3 = ("versus", "journey", "paper", "stairs")          # v3: large face by design (head box up to 400 px)
 LAYOUTS = {"premium": (page_premium, "confident", "bust"), "concept": (page_concept, "explaining", "head"),
-           "curious": (page_curious, "curious", "half")}
+           "curious": (page_curious, "curious", "half"),
+           "versus": (page_versus, "confident", "head"), "journey": (page_journey, "confident", "head"),
+           "paper": (page_paper, "explaining", "head"), "stairs": (page_stairs, "confident", "head")}
 
 def render(o, person, out_png):
     body, face, vars_ = LAYOUTS[o["layout"]][0](o, person)
@@ -218,6 +335,15 @@ def fit(o, info, cfg):
     over = right - (W - m)
     hits = [b for b in t if b["x"] < hb[2] and b["x"] + b["w"] > hb[0] and b["y"] < hb[3] and b["y"] + b["h"] > hb[1]]
     if not over > 0 and not hits: return None
+    if o["layout"] in ("versus", "journey", "stairs"):          # v3, face right: slide right a little, then shrink
+        if o.get("person_dx", 0) < 80: o["person_dx"] = o.get("person_dx", 0) + 40
+        else: o["person_h"] = int(o.get("person_h", 640) * 0.93)
+        return o
+    if o["layout"] == "paper":                        # v3, face left: move subject left, then shrink, then the text
+        if o.get("person_dx", 0) > -100: o["person_dx"] = o.get("person_dx", 0) - 50
+        elif o.get("person_h", 640) > 520: o["person_h"] = int(o.get("person_h", 640) * 0.93)
+        else: o["size"] = int(o.get("size", 104) * 0.94)
+        return o
     if o["layout"] == "premium":                      # subject right of a left text block: slide right, then shrink
         need = max(b["x"] + b["w"] for b in hits) + 30 - hb[0] if hits else 0
         if o.get("person_dx", 0) + need <= 160: o["person_dx"] = o.get("person_dx", 0) + need
@@ -230,7 +356,7 @@ def fit(o, info, cfg):
         o["person_h"] = int(o.get("person_h", 470) * 0.93)
     return o
 
-def qa(cfg, info, png, topic_words, headline_words_max=5):
+def qa(cfg, info, png, topic_words, headline_words_max=5, face_max=330):
     p = []; im = Image.open(png); m = cfg["thumbnails"]["safe_margin"]
     if im.size != (W, H): p.append(f"size {im.size}")
     if not {"Poppins 900"} <= set(info["fonts"]): p.append(f"headline font not loaded: {info['fonts']}")
@@ -245,7 +371,7 @@ def qa(cfg, info, png, topic_words, headline_words_max=5):
     hw = " ".join(b["text"] for b in info["boxes"] if b["qa"] == "headline").split()
     if len(hw) > headline_words_max: p.append(f"headline has {len(hw)} words (max {headline_words_max})")
     if (fx1 - fx0) < 110: p.append("face too small to read on a phone")
-    if (fx1 - fx0) > 330: p.append("face too large (oversized cut-out)")
+    if (fx1 - fx0) > face_max: p.append("face too large (oversized cut-out)")
     colors = {b["color"] for b in texts if b["font_px"] >= 60}
     return p
 
@@ -261,11 +387,13 @@ def run(cfg, rows, spec_file, out_dir, name="thumbnail_premium_v2", only=None):
         page, concept, crop = LAYOUTS[o["layout"]]
         cand = [r for r in rows if abs(r["t"] - o["frame_t"]) < 0.01] if o.get("frame_t") else faces.pick(rows, concept, 1)
         if not cand: raise RuntimeError(f"no usable face frame for '{concept}' (reasons: {faces.rejection_summary(rows)})")
-        r = cand[0]; fr = os.path.join(fdir, f"F{r['t']:07.2f}.png")
+        r = cand[0]; wc = R.wide_crop(cfg["sources"]["face_camera"])
+        ow, oh = (wc[2], wc[3]) if wc else (1920, 1080); sc = ow / 1920       # full source detail: no 1080p round trip
+        fr = os.path.join(fdir, f"F{r['t']:07.2f}" + (f"_{ow}" if sc != 1 else "") + ".png")
         if not os.path.exists(fr):
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-init_hw_device", "vulkan", "-ss", f"{r['t']:.2f}", "-i", cfg["sources"]["face_camera"],
-                            "-frames:v", "1", "-vf", R.face_filter(cfg, "libplacebo", 1920, 1080, R.wide_crop(cfg["sources"]["face_camera"]), "yuv420p"), fr], check=True)
-        person = cutout(fr, r["box"], fr.replace(".png", f"_{crop}_cut.png"), crop)
+                            "-frames:v", "1", "-vf", R.face_filter(cfg, "libplacebo", ow, oh, wc, "yuv420p"), fr], check=True)
+        person = cutout(fr, [v * sc for v in r["box"]], fr.replace(".png", f"_{crop}_cut.png"), crop)   # box: 1920 space -> frame
         png = os.path.join(out_dir, f"{name}_{k}.png"); info = render(o, person, png)
         for _ in range(4):                                       # measured-layout fitting (text never on the head, inside margins)
             o2 = fit(o, info, cfg)
@@ -273,7 +401,7 @@ def run(cfg, rows, spec_file, out_dir, name="thumbnail_premium_v2", only=None):
             o = o2; info = render(o, person, png)
         fitted = {k2: o[k2] for k2 in ("person_h", "person_dx", "size") if k2 in o}
         res.append({"file": png, "html": png.replace(".png", ".html"), "layout": o["layout"], "frame_t": r["t"], "fitted": fitted, "expression": {x: r[x] for x in ("smile", "jaw", "blink", "yaw", "roll")},
-                    "qa": qa(cfg, info, png, spec["topic_words"])})
+                    "qa": qa(cfg, info, png, spec["topic_words"], face_max=400 if o["layout"] in V3 else 330)})
     d = distinct([os.path.join(out_dir, f"{name}_{k}.png") for k in range(1, len(spec["options"]) + 1)
                   if os.path.exists(os.path.join(out_dir, f"{name}_{k}.png"))])
     for r in res: r["distinct"] = d

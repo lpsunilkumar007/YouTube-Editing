@@ -9,6 +9,32 @@
 
 v1 (Pillow text and boxes) is retired as the default, because it looked like a lecture slide.
 
+## v3 rules: what successful channels do (research, 2026-10-23)
+
+The v2 options for Lesson 02 were technically clean but weak as thumbnails: they repeated the title, used a mid-word frame and added decorative graphics. These rules come from creator-tool guidance ([vidIQ CTR guide](https://vidiq.com/blog/post/youtube-custom-thumbnails-ctr/), [vidIQ design tips](https://vidiq.com/blog/post/youtube-thumbnail-design-tips/), [thumbnailtest.com](https://thumbnailtest.com/guides/youtube-thumbnail-explained/)) and analyses of top creators ([Kapwing, faces](https://www.kapwing.com/resources/the-youtube-thumbnail-faces-that-attract-the-most-views/), [Income School](https://incomeschool.com/how-to-make-thumbnails-like-mrbeast/)). These are practitioner guides, not controlled studies, so test with YouTube's **Test & Compare** (up to 3 variants) when possible.
+
+1. **Start from the video's idea, not its title.** Take the one surprising or useful point the viewer gets, written in the description and content brief. Lesson 02: "don't start with code, start with a flowchart on copy and pen".
+2. **Thumbnail and title work together and never repeat each other.** The title says what the video is ("Learn Programming from Zero"); the thumbnail gives the hook ("DON'T CODE FIRST!").
+3. **2–4 huge words**, one of them on a yellow highlight block (#FACC15, dark text). White words get a dark outline. They must be readable when the thumbnail is about 160 px wide on a phone.
+4. **One idea, one focal point.** A single visual that shows the payoff or a **wrong vs right** contrast (red ✕ / lime ✓), or the **journey** (0 → … → result). No decorative graphics.
+5. **Large face, eye contact, a clear expression** (confident smile, curious, surprised), mouth closed or clearly expressive, never mid-word. The head box can be up to 400 px wide (v3 QA).
+6. **Bright accents on the dark brand background:** yellow highlight, red = wrong, lime = right/result, cyan for diagrams. Indian education audiences respond to vibrant thumbnails; the navy keeps them on-brand.
+7. **Honest:** every promise must be in the video. A misleading thumbnail costs retention, which costs reach.
+8. **Same template every lesson** (fonts, highlight block, face side) so the channel is recognisable in a feed.
+
+**Best photos:** a video frame of your face is only about 280 px wide (Lesson 02), so it looks soft enlarged. Most creators **shoot a separate still for the thumbnail**, with the iPhone camera at the desk right after recording, using a deliberate expression for the video's hook. It's still your real face. Put it in `lessons\<id>\thumbnails\photos\`; until the generator reads photos, give it to Claude to use.
+
+**v3 layouts** (`thumbs_v2.py`, input `thumbnail_input_v3.json`, output `thumbnail_v3_N.png`):
+
+| Layout | Composition | Use for |
+|---|---|---|
+| `versus` | Headline top-left; wrong tile (red ✕) → right tile (lime ✓); large face right | "Don't do X, do Y" lessons |
+| `journey` | Headline top-left; 3–4 node path (`nodes`: text, `flow`, `app`); large face right | Roadmaps, "from zero to …", step series |
+| `paper` | Face left; headline right; notebook page with a red-pen flowchart and a pen | Copy-and-pen, flowchart and algorithm lessons |
+| `stairs` | Headline top-left; rising staircase of stages (`steps`, low to high, optional `icons`: `flow`, `array`, `app`), star on the top step; large face right | Course intros, "basic to advanced", levels |
+
+Options: `headline` (lines), `mark` (words on the yellow block), `frame_t` (pinned face frame), `person_h` / `person_dx` / `size`. Fonts load from `assets\fonts` (no network). Frames are taken at the source's full resolution.
+
 ## Why HTML/CSS
 Pillow can only draw flat text and shapes. v2 composes each thumbnail as HTML/CSS/SVG and renders it in headless Chrome (the browser HyperFrames already installed). That gives:
 - **Real typography:** Poppins 900 and JetBrains Mono, both OFL fonts from Google Fonts, with kerning and text shadows.

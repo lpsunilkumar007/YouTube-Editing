@@ -10,8 +10,11 @@ def _count(v):
     return 1 if isinstance(v, str) and v else 0
 
 def _thumbnails(cfg, st):
-    """The approved thumbnail (note 'option_N') if there is one, else every current option (v2 first, v1 fallback)."""
-    P = cfg["paths"]; opts = sorted(glob.glob(os.path.join(P["thumbnails"], "thumbnail_premium_v2_*.png"))) or         sorted(glob.glob(os.path.join(P["thumbnails"], "thumbnail_option_*.png")))
+    """The approved thumbnail (note 'file:<name>.png' or 'option_N') if there is one, else every current option (v2 first, v1 fallback)."""
+    P = cfg["paths"]; note = st["approvals"].get("thumbnail", {}).get("note", "")
+    f = re.search(r"file:(\S+\.png)", note)
+    if f and os.path.exists(os.path.join(P["thumbnails"], f.group(1))): return [os.path.join(P["thumbnails"], f.group(1))]
+    opts = sorted(glob.glob(os.path.join(P["thumbnails"], "thumbnail_premium_v2_*.png"))) or         sorted(glob.glob(os.path.join(P["thumbnails"], "thumbnail_option_*.png")))
     m = re.search(r"option_(\d+)", st["approvals"].get("thumbnail", {}).get("note", ""))
     chosen = [f for f in opts if m and re.search(rf"_{m.group(1)}\.png$", f)]
     return chosen or opts
