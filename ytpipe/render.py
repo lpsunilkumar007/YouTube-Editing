@@ -70,6 +70,14 @@ def frame_crop(face_track, a, b, src_w, src_h, W=1920, H=1080):
     f = _face_median(face_track, a, b, src_w, src_h); cx = f[0] if f else src_w / 2
     return [int(round(min(max(0, cx - cw / 2), src_w - cw))), 0, cw, src_h]
 
+def tight(png):
+    """(path, x, y): an RGBA layer cropped to its visible pixels, written next to it (<name>_tight.png). Overlaying the
+    crop at (x, y) gives the same frame as overlaying the full layer, without blending the transparent rest every frame."""
+    from PIL import Image
+    im = Image.open(png); box = im.getchannel("A").getbbox() or (0, 0, 1, 1)
+    out = png[:-4] + "_tight.png"; im.crop(box).save(out)
+    return out, box[0], box[1]
+
 def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, badges=(), elements=(), focus=None):
     """seg = {layout, face_in, face_out, zoom?}. bar = (mov, start_face_time). badges = [(png, x, y, t0, t1)] local times.
     elements = [(mov, local_offset)]. Returns the ffmpeg command (also executed)."""
@@ -82,17 +90,18 @@ def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, bad
         fc = f"[0:v]fps={fps},{face_filter(cfg, pipeline, W, H, crop, 'yuv444p')},setsar=1[s0];"; prev = "s0"; n = 1
     else:
         d = g["camera"][2]; cx, cy, cw, ch = g["card"]
+        (rg, rx, ry), (sh, hx, hy), (rc, qx, qy) = (tight(layers[k]) for k in ("card_ring", "cam_shadow", "cam_ring"))
         inputs += ["-ss", f"{a + offset:.4f}", "-t", f"{T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
-                   *loop(layers["cam_mask"]), *loop(layers["card_ring"]), *loop(layers["cam_shadow"]), *loop(layers["cam_ring"])]
+                   *loop(layers["cam_mask"]), *loop(rg), *loop(sh), *loop(rc)]
         fc = (f"[0:v]fps={fps},{face_filter(cfg, pipeline, d, d, crop, 'yuv444p')},setsar=1,format=yuva444p[c0];"
               f"[4:v]format=gray,setsar=1[cmk];[c0][cmk]alphamerge[cam];"
               f"[1:v]{desk_filter(g, T, fps, seg.get('zoom'), cfg['zoom']['ease_s'])},format=yuva444p[d0];"
               f"[3:v]format=gray,setsar=1[dmk];[d0][dmk]alphamerge[desk];"
               f"[2:v]{rgb},format=yuv444p,setsar=1[bg];[5:v]{rgb},format=yuva444p,setsar=1[rg];"
               f"[6:v]{rgb},format=yuva444p,setsar=1[sh];[7:v]{rgb},format=yuva444p,setsar=1[rc];"
-              f"[bg][desk]overlay={cx}:{cy}:shortest=1:format=yuv444[s0];[s0][rg]overlay=0:0:format=yuv444[s1];"
-              f"[s1][sh]overlay=0:0:format=yuv444[s2];[s2][cam]overlay={g['camera'][0]}:{g['camera'][1]}:format=yuv444[s3];"
-              f"[s3][rc]overlay=0:0:format=yuv444[s4];")
+              f"[bg][desk]overlay={cx}:{cy}:shortest=1:format=yuv444[s0];[s0][rg]overlay={rx}:{ry}:format=yuv444[s1];"
+              f"[s1][sh]overlay={hx}:{hy}:format=yuv444[s2];[s2][cam]overlay={g['camera'][0]}:{g['camera'][1]}:format=yuv444[s3];"
+              f"[s3][rc]overlay={qx}:{qy}:format=yuv444[s4];")
         prev = "s4"; n = 8
         if bar:
             inputs += ["-ss", f"{a - bar[1]:.4f}", "-t", f"{T}", "-i", bar[0]]

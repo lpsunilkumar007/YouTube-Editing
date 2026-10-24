@@ -61,3 +61,14 @@ def test_segments_are_reused(tmp_path):
     pipeline.build(cfg, plan, a, meta, out); seg = os.path.join(cfg["paths"]["full_video"], "work", "seg_000.mkv"); m0 = os.path.getmtime(seg)
     time.sleep(1.1); os.remove(out); pipeline.build(cfg, plan, a, meta, out)
     assert os.path.getmtime(seg) == m0                                  # unchanged segment not re-rendered
+
+def test_sample_picks_presenter_slide_and_cut():
+    from ytpipe import sample
+    segs = [{"layout": "A", "face_in": 1.0, "face_out": 14.0}, {"layout": "B", "face_in": 14.0, "face_out": 40.0},
+            {"layout": "A", "face_in": 41.0, "face_out": 60.0}]
+    p = sample.pick({"segments": segs, "chips": [[14.0, "X", ["a"], 0], [25.0, "X", ["a"], 1]]}, 30)
+    assert [lab for lab, _ in p] == ["presenter", "slide", "cut"]
+    assert p[1][1][0]["face_in"] == 22.5 and p[1][1][0]["parent"] == 1          # around the chip change at 25 s
+    l, r = p[2][1]; assert (l["face_out"], r["face_in"], l["parent"], r["parent"]) == (40.0, 41.0, 1, 2)
+    at = sample.pick({"segments": segs}, 30, at=[20.0])[0][1][0]                   # final-video 20 s = face 21 s
+    assert at["parent"] == 1 and abs(at["face_in"] - 18.5) < 1e-9
