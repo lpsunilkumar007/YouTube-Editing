@@ -14,6 +14,7 @@ All commands take the form `python -m ytpipe <stage> --config lessons\<id>\video
 | 6 | ~15 s review sample: presenter, a slide with the circle camera and chips, and a cut, rendered with the final settings (about 25 s). Pick other moments with `--at <final-video seconds>`. Re-run after each change. **⛔ `preview` / style** | `sample` (or `preview --segments …`) | `full_video\sample\sample.mp4`, `sample.json` |
 | 7 | Full render. **⛔ `full_render`** must be given first. Includes desktop frame-timing, joint, loudness and decode QA | `render` | `full_video\<id>.mp4`, `timelines\edl.json`, `reports\qa_full_video.json` |
 | 8 | Subtitles and publishing metadata. Claude writes `description_input.json` from `content_brief.md` | `captions`, `metadata` | SRT, captions review, `metadata\*` |
+| 8b | Blog post for your website / Medium. Claude writes `metadata\blog_input.json` from `content_brief.md` (only what the video says); the stage renders it and checks SEO (title 30–60 chars, description 120–160, keyword in title, slug, first paragraph and a heading, 800+ words). Add `video_url` after uploading and rerun | `blog` | `blog\<slug>.md`, `.html` (paste into Medium or a CMS), `SEO.txt`, cover image |
 | 9 | Three thumbnail options. **⛔ `thumbnail`** (you choose) | `thumbnails` | `thumbnails\thumbnail_option_1..3.png` |
 | 10 | Shorts/Reels candidates (report only), curated by Claude | `shorts` | `shorts\shorts_candidate_report.md` |
 | 11 | **⛔ `shorts`**: you approve specific clips | `approve shorts --note "1,3"` | |
