@@ -69,6 +69,35 @@ def music_lufs(path):
     r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True).stderr
     return float(r.split("I:")[-1].split("LUFS")[0])
 
+def music_plan(cfg, segs, chapters, pauses, intro_s=8.0, swell_s=4.0, outro_s=6.0):
+    """Timeline "music_sections": "auto: ..." (TEACHING_VIDEO_STYLE section 14) -> sections in FACE time
+    [(f0, f1, track_t0, keys)]: under the opening shot, a ~4 s swell centred on the pause before each chapter after the
+    first, and the track's own ending under the last seconds. keys [(face_t, L)]: L = music loudness (LUFS against the
+    -16 LUFS delivery voice, before the bed offset and the duck_db speech ducking), None = silent."""
+    M = cfg["audio"]["music"]; L = cfg["audio"]["delivery_lufs"] - M["below_voice_db"][0] + M["duck_db"]   # measured 25-35 dB under the voice (Lesson 02)
+    a, z = segs[0]["face_in"], segs[-1]["face_out"]; out = []; h = swell_s / 2
+    if "intro" in M["placement"]:
+        out.append((a, a + intro_s, 0.0, [(a, None), (a + 0.8, L), (a + intro_s - 2.5, L), (a + intro_s, None)]))
+    if "chapter_breaks" in M["placement"]:
+        for c, _ in chapters[1:]:
+            near = [p for p in pauses if p[0] <= c + 0.5 and p[1] >= c - 3.0]   # the pause that opens the chapter
+            p = min(near, key=lambda p: abs((p[0] + p[1]) / 2 - c)) if near else None; m = (p[0] + p[1]) / 2 if p else c
+            out.append((m - h, m + h, m - h, [(m - h, None), (m, L), (m + h, None)]))
+    if "outro" in M["placement"]:
+        n = len(ff_float(["-i", M["file"]], 1)) / SR
+        out.append((z - outro_s, z, n - outro_s - 0.5, [(z - outro_s, None), (z - outro_s + 2.0, L), (z, L)]))
+    return out
+
+def to_edit(sections, built):
+    """Face-time sections -> edit-time sections for the segments actually built [(face_in, face_out, edit_start)]: a
+    sample gets exactly the music the full render has at those moments (same track position, same level curve)."""
+    out = []
+    for f0, f1, tr0, keys in sections:
+        for fi, fo, es in built:
+            a, b = max(f0, fi), min(f1, fo); d = es - fi
+            if b > a: out.append((a + d, b + d, tr0 + a - f0, [(t + d, L) for t, L in keys]))
+    return out
+
 def mix(cfg, pieces, sections, sfx, out_wav, stem_wav):
     fps = cfg["output"]["fps"]; y, runs = narration_raw(cfg["sources"]["face_camera"], pieces, fps)
     wavfile.write(stem_wav, SR, y.astype(np.float32))                       # narration stem for joint QC
