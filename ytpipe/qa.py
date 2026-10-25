@@ -48,7 +48,8 @@ def frame_timing(video, edl, desktop, offset, ink_events_desktop, g, tol_frames=
         seq = media.frames(desktop, D - 6 / fps, 13 / fps, 480, 270, fps, vf_pre=f"crop={sw}:{sh}:{sx}:{sy}", pix="rgb24").astype(np.int16)
         red = (seq[..., 0] > 150) & (seq[..., 1] < 90) & (seq[..., 2] < 100); roi = red.any(0) & ~red.all(0)
         if roi.sum() < 15 or len(seq) < 13: continue
-        n += 1; err = [np.abs(fin[roi] - s[roi]).mean() for s in seq]; lag = int(np.argmin(err)) - 6
+        n += 1; err = np.array([np.abs(fin[roi] - s[roi]).mean() for s in seq])     # a finished dot or duplicated source frames
+        lag = int(np.argmax(err <= err.min() + max(0.5, 0.05 * np.ptp(err)))) - 6   # give a flat minimum: take its first frame
         if abs(lag) > tol_frames: out.append({"edit_time": round(float(t), 2), "face_time": round(F, 2), "lag_frames": lag})
     return {"checked": n, "lags": out}
 
@@ -86,7 +87,7 @@ def sync_checks(cfg, video, edl, desktop, offset, analysis, g):
         f.append("sync not verified: no pen stroke or slide change inside a slide shot to compare; confirm the offset by eye")
     return {"pen_strokes": pen, "slide_changes": sl, "findings": f}
 
-def music(cfg, music_wav, duration):
+def music(cfg, music_wav, duration, planned=None):
     """Music stem (written by audio.mix): each section's loudness under the -16 LUFS delivery voice (style section 14:
     25-35 dB under, plus up to duck_db of ducking), and placement: only the intro, the outro and short chapter swells."""
     M = cfg["audio"]["music"]; lo, hi = M["below_voice_db"]; x = media.audio(music_wav, sr=8000)
@@ -105,6 +106,8 @@ def music(cfg, music_wav, duration):
         if gap < lo - 1: f.append(f"music {a:.1f}-{b:.1f} s only {gap} dB under the voice (style: {lo}-{hi})")
         if gap > hi + M["duck_db"] + 1: f.append(f"music {a:.1f}-{b:.1f} s is {gap} dB under the voice: barely audible")
         if kind == "swell" and b - a > 6.0: f.append(f"music runs {b - a:.1f} s mid-video at {a:.1f} s (style: only short swells at chapter breaks)")
+    for a, b in planned or []:                        # every planned section must be heard (a track can end too soon)
+        if not any(s["start"] < b and s["end"] > a for s in out): f.append(f"planned music {a:.1f}-{b:.1f} s is silent")
     return {"sections": out, "findings": f}
 
 def captions(srt_path, duration, cfg):
@@ -147,7 +150,9 @@ def full_video(cfg, final, edl, stem=None, cut_times=(), sync=None, music_wav=No
     if res["loudness"]["TP"] > cfg["audio"]["true_peak_dbtp"]: f.append(f"true peak {res['loudness']['TP']} dBTP")
     if stem: res["joints"] = joints(stem, cut_times, max_gap=2 * cfg["editing"]["room_tone_each_side_s"][1] + 0.1); f += [f"joint {j['cut']}: {j['findings']}" for j in res["joints"]]
     if sync: res["sync"] = sync; f += sync["findings"]
-    if music_wav and os.path.exists(music_wav): res["music"] = music(cfg, music_wav, d); f += res["music"]["findings"]
+    if music_wav and os.path.exists(music_wav):
+        mp = os.path.join(os.path.dirname(music_wav), "music_plan.json")
+        res["music"] = music(cfg, music_wav, d, json.load(open(mp)) if os.path.exists(mp) else None); f += res["music"]["findings"]
     elif cfg["audio"]["music"]["enabled"]: res["music"] = "not checked: no music_stem.wav (render made before this check)"
     res["findings"] = f
     return _save(cfg, "full_video", res)

@@ -83,6 +83,7 @@ def build(cfg, plan, analysis, meta, out_mp4, only=None, gate="full_render", wd=
     if music is None and str(plan.get("music_sections", "")).startswith("auto") and cfg["audio"]["music"]["enabled"]:
         music = audio.to_edit(audio.music_plan(cfg, plan.get("parent_segments", segs), plan.get("chapters", []), analysis.get("pauses", [])),
                               [(s["face_in"], s["face_out"], t) for s, t in zip(segs, starts)])
+    json.dump([[a, b] for a, b, *_ in (music or [])], open(os.path.join(wd, "music_plan.json"), "w"))   # for the music QA
     res = audio.mix(cfg, [(s["face_in"], n) for s, n in zip(segs, nfr)], music or [], plan.get("sfx", []),
                     os.path.join(wd, "mix.wav"), os.path.join(wd, "narration_stem.wav"))
     audio.mux(joined, os.path.join(wd, "mix.wav"), out_mp4, cfg)

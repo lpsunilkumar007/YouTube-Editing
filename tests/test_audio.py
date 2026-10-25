@@ -30,3 +30,14 @@ def test_music_plan_follows_style_and_maps_to_samples():
     part = audio.to_edit(secs, [(58.0, 62.0, 0.0)])                     # a sample piece around the chapter break
     f = next(x for x in full if x[0] > 40); p = part[0]
     assert abs((f[2] + (58.0 - (f[0] - 49.0 + 52.0))) - p[2]) < 1e-9   # same track position at the same face moment
+
+def test_swells_after_the_track_length_still_have_music(tmp_path):
+    """Lesson 03 (11:27) with a 6:15 track: chapter swells after 6:15 read past the track's end and were silent."""
+    import numpy as np
+    from scipy.io import wavfile
+    from ytpipe import audio
+    trk = str(tmp_path / "track.wav"); wavfile.write(trk, 48000, (0.1 * np.ones(48000 * 30)).astype(np.float32))   # 30 s track
+    cfg = {"audio": {"delivery_lufs": -16.0, "music": {"file": trk, "placement": ["chapter_breaks", "outro"], "below_voice_db": [25, 35], "duck_db": 6}}}
+    secs = audio.music_plan(cfg, [{"face_in": 0.0, "face_out": 120.0}], [(0.0, "A"), (50.0, "B"), (100.0, "C")], [])
+    sw = [s for s in secs if s[1] - s[0] == 4.0]
+    assert len(sw) == 2 and all(0 <= s[2] and s[2] + 4.0 <= 30.0 for s in sw), sw                  # inside the track
