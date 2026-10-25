@@ -2,9 +2,9 @@
 
 Date: 2026-10-25. Machine: Apple M2, 8 GB, macOS 26.2. Branch reviewed: `music-long-video` (contains all four branches).
 
-**Verdict:** ready for Lesson 03, with 2 open items:
-- the encoder change needs your approval (§3)
-- the inputs you supply each lesson (§7)
+**Verdict:** ready for Lesson 03. Open item: the inputs you supply each lesson (§7).
+
+The encoder change was approved on 2026-10-25 (§3).
 
 The quality-check gaps in §6 are fixed on branch `qa-hardening` (PR #7).
 
@@ -17,7 +17,7 @@ Lesson 02 assets were not re-rendered or modified during this review. A before-a
 | 1 | Branch dependencies | PASS | One straight line from `main` (7f53eff): thumbnails-v3 → render-speed-sample → blog-posts → music-long-video. `main` has not moved, so each merges without conflicts. |
 | 2 | Conflicts between modules | PASS | §2 |
 | 3 | Test suite | PASS | After `qa-hardening`: 33 pass, 2 skip (they need Lesson 01 files, which are not on this Mac; §4). Before it: 30 passed and those 2 failed. |
-| 4 | Encoder CRF 14 / medium vs the approved encode | PASS (needs your approval) | VMAF 97.1 mean, 96.1 worst frame (§3). Not yet the production default on `main`. |
+| 4 | Encoder CRF 14 / medium vs the approved encode | PASS, APPROVED 2026-10-25 | VMAF 97.1 mean, 96.1 worst frame (§3). It becomes the default on `main` when PR #4 is merged. |
 | 5 | Reusable configuration | PASS with caveats | Lesson configs hold only paths, topic, number and two overrides. 4 hard-coded fallbacks remain (§5). |
 | 6 | Modules working together | PASS | Re-ran captions, metadata, blog, shorts, qa and package on a copy of Lesson 02. Outputs match the originals exactly, apart from build timestamps and folder paths. |
 | 7a | QA: narration continuity | PASS | Every cut checked on the narration stem (not the mix). The old note at 1:59.7 (a 0.58 s pause, within the 2 × 0.35 s room tone the timeline keeps) is no longer flagged; the threshold now comes from config. |
@@ -52,8 +52,7 @@ Measured by comparing frame by frame against the approved encode. No re-render w
 - **Speed and size:**
   - full render: 5.6 min → 3.6 min
   - file size: 456 MB → 327 MB, which also makes the upload 28 % smaller
-- **Status:** the change is committed only on `render-speed-sample` (PR #4). **Merging PR #4 makes it the production default.** It is your call.
-  - If you'd rather keep CRF 12 / slow, I'll split the encoder line out of the PR and keep the other speed-ups. They produce identical frames.
+- **Status:** **approved by you on 2026-10-25: keep CRF 14 / medium.** It is committed on `render-speed-sample` (PR #4) and becomes the production default when PR #4 is merged.
 
 ## 4. Test failures
 
@@ -108,7 +107,6 @@ Lesson 02 now:
 - Listen-check its 10 caption lines.
 - Upload it.
 - Blog: give me your author name and website address.
-- Decide on the encoder (§3).
 
 Once:
 - Merge PRs #3 → #6 in order, after review.
