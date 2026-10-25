@@ -13,10 +13,11 @@ checks, and the files in <lesson>/blog/:
 
 blog_input.json: title, subtitle, kicker, slug, focus_keyword, seo_title, meta_description, tags (<= 5, Medium's limit),
 cover_alt, author, site_url, video_url (empty until the video is uploaded), intro [blocks], sections [{heading, body}],
-takeaways [str], faq [{q, a}], cta [blocks], related [{title, url}]. A block is a paragraph string; a block may also be
+takeaways [str], faq [{q, a}], cta [blocks], related [{title, url}], shorts_urls [str] (optional, after upload: one per
+Short, in the order listed). The "Watch the short versions" section is built from the Shorts metadata files, not typed. A block is a paragraph string; a block may also be
 "- item" lines (list), "1. item" lines (numbered), "> quote", or a ``` fenced code block. Inline: **bold**, *italic*,
 `code`, [text](url)."""
-import html, json, os, re, shutil, time
+import glob, html, json, os, re, shutil, time
 
 WPM = 230                                             # reading speed for the "N min read" line
 
@@ -56,6 +57,16 @@ def chapters_from(path):
         if m: out.append((sum(int(x) * 60 ** k for k, x in enumerate(reversed(m.group(1).split(":")))), m.group(2)))
     return out
 
+def shorts_from(P):
+    """The lesson's Shorts from their metadata files (same order as UPLOAD_COPY) -> [(title, clip_start_s, seconds)]."""
+    out = []
+    dirs = [os.path.join(P["metadata"], "shorts")] + ([os.path.join(P["shorts"], "metadata")] if P.get("shorts") else [])
+    for f in sorted(f for d in dirs for f in glob.glob(os.path.join(d, "*.md"))):
+        md = open(f, encoding="utf-8").read(); t = re.search(r"\*\*Title:\*\* (.+)", md)
+        c = re.search(r"\*\*Clip:\*\* (\d+):(\d\d)\D+\d+:\d\d of the final video \(([\d.]+) s\)", md)
+        if t: out.append((t.group(1).strip(), int(c.group(1)) * 60 + int(c.group(2)) if c else None, round(float(c.group(3))) if c else None))
+    return out
+
 def check(inp, words):
     """SEO and honesty checks -> list of problems (empty = pass). Lengths follow common search-result truncation."""
     p, kw = [], inp["focus_keyword"].lower(); has = lambda s: kw in (s or "").lower()
@@ -75,11 +86,14 @@ def check(inp, words):
         if bad in blob: p.append(f"unresolved marker {bad!r} in the text")
     return p
 
-def todo(inp):
+def todo(inp, shorts=()):
     """Fields that can only be filled later or by the user: reported, not failures."""
-    return [m for k, m in (("video_url", "add video_url after uploading the video (then rerun): enables the embed, timestamp links and VideoObject schema"),
-                           ("author", "add the author name as it should appear on the blog"),
-                           ("site_url", "add site_url (your blog's address) for the canonical link")) if not inp.get(k)]
+    out = [m for k, m in (("video_url", "add video_url after uploading the video (then rerun): enables the embed, timestamp links and VideoObject schema"),
+                          ("author", "add the author name as it should appear on the blog"),
+                          ("site_url", "add site_url (your blog's address) for the canonical link")) if not inp.get(k)]
+    if len([u for u in inp.get("shorts_urls", []) if u]) < len(shorts):
+        out.append(f"add shorts_urls (one per Short, in the order of the 'Watch the short versions' list) after uploading the {len(shorts)} Shorts")
+    return out
 
 def build(cfg, inp, cover=None):
     P = cfg["paths"]; out = os.path.join(P["root"], "blog"); os.makedirs(out, exist_ok=True); slug = inp["slug"]
@@ -99,6 +113,16 @@ def build(cfg, inp, cover=None):
         doc.append(("h2", s["heading"])); doc += [("block", b) for b in s["body"]]
     if ch:
         doc.append(("h2", "Video chapters")); doc.append(("chapters", ch))
+    shorts = shorts_from(P); su = inp.get("shorts_urls", [])
+    if shorts:                                        # the lesson's Shorts: link once uploaded, and where each sits in the full video
+        def line(k, title, t0, sec):
+            u = su[k] if k < len(su) and su[k] else ""; name = f"[{title}]({u})" if u else f"**{title}**"
+            info = ", ".join(x for x in ((f"{sec} s Short" if sec else "Short") + ("" if u else ", link after upload"),
+                                         (f"from [{mm(t0)}]({at(t0)}) in the full video" if vid else f"from {mm(t0)} in the full video") if t0 is not None else "") if x)
+            return f"- {name} ({info})"
+        doc.append(("h2", "Watch the short versions"))
+        doc.append(("block", "Short on time? These Shorts from this lesson each make one point in under a minute."))
+        doc.append(("block", "\n".join(line(k, *s) for k, s in enumerate(shorts))))
     if inp.get("takeaways"):
         doc.append(("h2", "Key takeaways")); doc.append(("block", "\n".join(f"- {t}" for t in inp["takeaways"])))
     if inp.get("faq"):
@@ -176,7 +200,7 @@ def build(cfg, inp, cover=None):
             f"{head}<style>{css}</style>\n</head>\n<body>\n<!-- ARTICLE START: select from here when pasting into Medium or a CMS -->\n<article>\n"
             + "\n".join(body) + "\n</article>\n<!-- ARTICLE END -->\n</body>\n</html>\n")
     open(os.path.join(out, f"{slug}.html"), "w", encoding="utf-8").write(page)
-    probs = check(inp, words); later = todo(inp)
+    probs = check(inp, words); later = todo(inp, shorts)
     seo = ["SEO FIELDS (paste into your CMS / Medium story settings)", "",
            f"SEO title ({len(inp['seo_title'])} chars):", inp["seo_title"], "",
            f"Meta description ({len(inp['meta_description'])} chars):", inp["meta_description"], "",

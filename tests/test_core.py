@@ -65,3 +65,19 @@ def test_blog_builds_and_checks_seo(tmp_path):
     h = (tmp_path / "blog" / "how-to-start-programming.html").read_text()
     assert "youtube.com/embed/abcdefghijk" in h and "&t=65s" in h and '"FAQPage"' in h and "<strong>bold</strong>" in h
     inp["seo_title"] = "x" * 70; assert any("SEO title" in p for p in blog.check(inp, 900))
+
+def test_blog_lists_the_lessons_shorts(tmp_path):
+    from ytpipe import blog
+    cfg = {"paths": {"root": str(tmp_path), "metadata": str(tmp_path)}}; (tmp_path / "shorts").mkdir()
+    for n, t, c in (("a", "Start Here", "0:53–1:37 of the final video (44.3 s)"), ("b", "My Roadmap", "1:44–2:26 of the final video (42.0 s)")):
+        (tmp_path / "shorts" / f"{n}.md").write_text(f"# {t}\n\n**Clip:** {c}\n\n## YouTube Shorts\n**Title:** {t}\n")
+    assert blog.shorts_from(cfg["paths"]) == [("Start Here", 53, 44), ("My Roadmap", 104, 42)]
+    para = "How to start programming: " + "word " * 120
+    inp = {"title": "T", "slug": "how-to-start-programming", "focus_keyword": "how to start programming", "seo_title": "How to start programming x",
+           "meta_description": "d", "tags": [], "cover_alt": "c", "intro": [para], "sections": [{"heading": "How to start programming", "body": [para]}]}
+    r = blog.build(cfg, inp); md = (tmp_path / "blog" / "how-to-start-programming.md").read_text()
+    assert "## Watch the short versions" in md and "- **Start Here** (44 s Short, link after upload, from 0:53 in the full video)" in md
+    assert any("shorts_urls" in m for m in r["todo"])
+    inp.update(video_url="https://youtu.be/abcdefghijk", shorts_urls=["https://youtube.com/shorts/AAAAAAAAAAA", "https://youtube.com/shorts/BBBBBBBBBBB"])
+    r = blog.build(cfg, inp); h = (tmp_path / "blog" / "how-to-start-programming.html").read_text()
+    assert '<a href="https://youtube.com/shorts/AAAAAAAAAAA">Start Here</a>' in h and "t=104s\">1:44</a>" in h and not any("shorts_urls" in m for m in r["todo"])
