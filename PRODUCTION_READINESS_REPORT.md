@@ -2,10 +2,11 @@
 
 Date: 2026-10-25. Machine: Apple M2, 8 GB, macOS 26.2. Branch reviewed: `music-long-video` (contains all four branches).
 
-**Verdict:** ready for Lesson 03, with 3 open items:
+**Verdict:** ready for Lesson 03, with 2 open items:
 - the encoder change needs your approval (§3)
-- the pen-sync check didn't run on Lesson 02 (§6)
 - the inputs you supply each lesson (§7)
+
+The quality-check gaps in §6 are fixed on branch `qa-hardening` (PR #7).
 
 Lesson 02 assets were not re-rendered or modified during this review. A before-and-after snapshot of all 142 files in `lessons/` showed no change.
 
@@ -15,16 +16,16 @@ Lesson 02 assets were not re-rendered or modified during this review. A before-a
 |---|---|---|---|
 | 1 | Branch dependencies | PASS | One straight line from `main` (7f53eff): thumbnails-v3 → render-speed-sample → blog-posts → music-long-video. `main` has not moved, so each merges without conflicts. |
 | 2 | Conflicts between modules | PASS | §2 |
-| 3 | Test suite | PASS (30/32) | 30 pass. 2 fail because Lesson 01 files are not on this Mac (§4). |
+| 3 | Test suite | PASS | After `qa-hardening`: 33 pass, 2 skip (they need Lesson 01 files, which are not on this Mac; §4). Before it: 30 passed and those 2 failed. |
 | 4 | Encoder CRF 14 / medium vs the approved encode | PASS (needs your approval) | VMAF 97.1 mean, 96.1 worst frame (§3). Not yet the production default on `main`. |
 | 5 | Reusable configuration | PASS with caveats | Lesson configs hold only paths, topic, number and two overrides. 4 hard-coded fallbacks remain (§5). |
 | 6 | Modules working together | PASS | Re-ran captions, metadata, blog, shorts, qa and package on a copy of Lesson 02. Outputs match the originals exactly, apart from build timestamps and folder paths. |
-| 7a | QA: narration continuity | PASS | Every cut checked on the narration stem (not the mix). 1 note at 1:59.7 is a natural 0.58 s pause, also present in the approved version. |
-| 7b | QA: synchronisation | PARTIAL | The offset (11.96 s) is your manual confirmation. The automatic pen-stroke check compared **0 moments**, because Lesson 02 has no pen writing on slides (§6). |
+| 7a | QA: narration continuity | PASS | Every cut checked on the narration stem (not the mix). The old note at 1:59.7 (a 0.58 s pause, within the 2 × 0.35 s room tone the timeline keeps) is no longer flagged; the threshold now comes from config. |
+| 7b | QA: synchronisation | PASS | Slide changes are now a second sync anchor. On Lesson 02: 5 slide changes compared, 0 off by more than 1 frame, so the 11.96 s offset is verified. QA now says so when nothing can be compared. |
 | 7c | QA: caption accuracy | MANUAL | QA checks timing, length and overlaps (pass, 51 cues). The wording of 10 reconstructed (≈) lines needs a listen-check (`reports/captions_review.md`). |
-| 7d | QA: audio levels | PASS | −16.0 LUFS integrated, −1.9 dBFS peak (target −16 ± 1, ≤ −1.5). Music measured 27–33 dB under the voice by hand, not by QA. |
+| 7d | QA: audio levels | PASS | −16.0 LUFS integrated, −1.9 dBFS peak (target −16 ± 1, ≤ −1.5). Music is now checked automatically: Lesson 02's 5 sections are 27–34 dB under the voice, placed only at the intro, the chapter breaks and the outro. |
 | 8 | Manual steps listed | DONE | §7 |
-| 9 | Pull requests | PREPARED | 4 stacked PRs (#3–#6), none merged. |
+| 9 | Pull requests | PREPARED | 5 stacked PRs (#3–#7), none merged. |
 
 ## 2. Overlap between the branches
 
@@ -63,7 +64,7 @@ Measured by comparing frame by frame against the approved encode. No re-render w
 
 These two tests depend on the Windows-era Lesson 01 data, not on this code.
 
-Recommendation: skip them automatically when the data is missing, so a red test always means a real problem.
+Fixed in `qa-hardening`: they skip automatically when the data is missing, so a red test always means a real problem. The Lesson 01 geometry test is split, so its layout half still runs.
 
 ## 5. Values that only fit the current recording setup
 
@@ -77,23 +78,27 @@ Recommendation: skip them automatically when the data is missing, so a red test 
 
 Keep OBS at 1920×1080, 30 fps for Lesson 03 and none of these matter. I recommend a small follow-up branch that reads them from config.
 
-## 6. Quality-check gaps (recommended follow-up, not yet changed)
+## 6. Quality-check fixes (branch `qa-hardening`, PR #7)
 
-1. **The pen-sync check is silent when it checks nothing.**
-   - `qa.frame_timing` reports only failures. On Lesson 02 it compared 0 moments: the 5 "ink" events are screen flashes at the start and end of the OBS recording, outside the lesson.
-   - Fix: report how many moments were checked, fail when it is 0, and also use slide changes as sync anchors.
-2. **The frame-timing result is never saved.** It is attached after `qa_full_video.json` is written, so the file never contains it.
-3. **Music level isn't checked automatically.** QA measures the whole mix. Add a music-only measurement (new mix minus the narration stem) against the 25–35 dB rule.
-4. **The sync report says "pre-render check"**, but the check runs after the render.
-5. **`analyze.run`** never closes its thread pool, so if desktop analysis fails, the background decodes keep running.
+| Gap found in the review | Fix |
+|---|---|
+| The pen-sync check compared 0 moments on Lesson 02 and still looked like a pass | It reports how many moments it compared. **Slide changes are a second anchor** (`qa.slide_timing`). QA says "sync not verified" when neither can be compared. |
+| The frame-timing result was never saved | Everything goes into `qa_full_video.json`, under `sync` and `music`. |
+| Music level was checked only by hand | `qa.music` reads a separate music track (`work/music_stem.wav`) and checks each section's level against the 25–35 dB rule. It also flags music longer than 6 s mid-video. |
+| A 0.58 s designed joint pause was flagged every render | The joint gap limit comes from the config: 2 × kept room tone + 0.1 s = 0.8 s. A 1 s hole is still caught (tested). |
+| The sync report said "pre-render" | It now says the check runs after the render, and what to do when it can't verify. |
+| `analyze.run` never shut its thread pool | The pool is shut down in a `finally`. |
+| A finished video could not be re-checked | `qa --final <video>` re-runs all full-video checks, read only, with the stems from that render. |
 
-None of these affect the delivered Lesson 02 files. I recommend fixing them in one `qa-hardening` branch before Lesson 03. Each is small.
+Verified on fixtures: a deliberate 4-frame sync error is caught by both anchors, and the test with no anchors reports "not verified".
+
+Verified on Lesson 02, on a scratch copy with only the audio stems rebuilt (they match the delivered audio to −37.6 dB): **0 findings**.
 
 ## 7. Manual steps that stay with you
 
 Every lesson:
 - **Approval gates:** timeline, sample/preview, full render, thumbnail and Shorts.
-- **Sync:** if OBS has no audio, confirm the offset, unless the lesson has pen writing for the automatic check.
+- **Sync:** if OBS has no audio, confirm the offset when QA says "sync not verified" (no pen strokes or slide changes inside slide shots).
 - **Captions:** listen-check the ≈ caption lines.
 - **Before uploading:** go through `PUBLISHING_CHECKLIST.md`.
 - **Uploading:** to YouTube, Instagram and the blog. The pipeline never uploads.

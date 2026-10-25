@@ -6,7 +6,7 @@ voice    : approved chain + two-pass loudnorm to audio.narration_lufs_mono (-19 
 music    : sections [(t0, t1, track_t0|None, level_keys)] in edit time; levels relative to a -16 LUFS mono voice, moved
            by the same -3 dB; ducking up to audio.music.duck_db under speech; None track_t0 = use the track's ending.
 sfx      : [(file, edit_time, peak_dbfs)]."""
-import json, subprocess
+import json, os, subprocess
 import numpy as np
 from scipy.io import wavfile
 from . import media
@@ -110,6 +110,7 @@ def mix(cfg, pieces, sections, sfx, out_wav, stem_wav):
             i0, i1 = int(max(0, t0) * SR), min(n, int(t1 * SR)); seg = trk[int(tr0 * SR):int(tr0 * SR) + (i1 - i0)]
             k2 = [(0.0, None)] + [(t, None if L is None else L + BED_OFFSET_DB) for t, L in keys] + [(total + 1, None)]
             lv = level_curve(n, k2, mL)[i0:i0 + len(seg)]; music[i0:i0 + len(seg)] += seg * (lv * dk[i0:i0 + len(seg)])[:, None]
+    wavfile.write(os.path.join(os.path.dirname(stem_wav), "music_stem.wav"), SR, music.astype(np.float32))   # for the music QA
     fx = np.zeros((n, 2))
     if cfg["audio"]["sfx"]["enabled"]:
         for f, t, pk in sfx:

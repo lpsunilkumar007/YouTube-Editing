@@ -20,7 +20,7 @@
 | 12 | Lecture outro | kind `end` + outro music | Approved in Lesson 01 |
 | 13 | Music and audio mixing | `audio` | Tested (fixtures): sample-exact narration placement, −16 LUFS |
 | 14 | Final video export | `pipeline.build` (gates, segment reuse, never overwrites) | Tested end to end (fixtures). **Not run on a real new lecture** |
-| 15 | Automated QA | `qa` (full video, joints, **frame timing**, captions, Shorts), `thumbnails.qa`, `metadata` validation | Tested (fixtures + Lesson 01 captions) |
+| 15 | Automated QA | `qa` (full video, joints, **sync at pen strokes and slide changes**, music level/placement, captions, Shorts; `qa --final` re-checks a finished video), `thumbnails.qa`, `metadata` validation | Tested (fixtures + Lesson 01 captions) |
 | 16 | Sync | `sync` (metadata + audio xcorr + drift; stops when unsure) | Tested (fixtures: offset within 10 ms) |
 | 17 | Analysis | `analyze` (slide area, changes, counter, ink, masks, pauses, face) | Tested against the fixture ground truth |
 | 18 | Timeline proposal | `timeline` | Tested on fixtures; **its layout heuristics need review on a real lecture** |
