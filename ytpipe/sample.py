@@ -4,9 +4,10 @@ Three ~5 s pieces of the approved timeline, joined: the full-frame presenter, a 
 (around a chip change), and a cut between takes or a layout switch. They are rendered by the full-render code with the
 final settings (crops from the full takes, same encoder, same audio chain), so what is approved is what the full render
 produces. --at picks the pieces yourself (final-video times in seconds). Output: full_video/sample/sample.mp4 and
-sample.json (where each piece sits in the final video). Review it, then: approve preview."""
+sample.json (where each piece sits in the final video, and the sync check of its slide shots at pen strokes and
+slide changes: pick a piece with writing or a slide change to verify the offset). Review it, then: approve preview."""
 import json, os
-from . import pipeline
+from . import pipeline, qa
 
 def _clip(segs, i, a, b, fps):
     snap = lambda t: round(t * fps) / fps
@@ -23,11 +24,14 @@ def pick(plan, fps, n=5.0, at=None):
     free = lambda a, b: all(b <= u0 or a >= u1 for u0, u1 in used)
     def piece(label, i, a, b):
         used.append((a, b)); return (label, [_clip(segs, i, a, b, fps)])
-    if at:
+    if at:                                            # a piece may span joints (cuts, layout switches): that is what to review
         out = []
         for t in at:
-            i = max(k for k, e in enumerate(E) if e <= t); f = segs[i]["face_in"] + t - E[i]
-            out.append(piece(f"at {t:.0f} s", i, f - n / 2, f + n / 2))
+            a, b = t - n / 2, t + n / 2; used.append((a, b)); parts = []
+            for i, (s, e) in enumerate(zip(segs, E)):
+                d = s["face_out"] - s["face_in"]
+                if e < b and e + d > a: parts.append(_clip(segs, i, s["face_in"] + max(0.0, a - e), s["face_in"] + min(d, b - e), fps))
+            out.append((f"at {t:.0f} s", [p for p in parts if p["face_out"] - p["face_in"] >= 2 / fps]))
         return out
     out = []
     A = [i for i, s in enumerate(segs) if s["layout"] == "A"]
@@ -60,5 +64,6 @@ def build(cfg, plan, analysis, meta, n=5.0, at=None):
             "pieces": [{"label": lab, "final_video": f"{mm(E[p[0]['parent']] + p[0]['face_in'] - plan['segments'][p[0]['parent']]['face_in'])}"
                                                     f"–{mm(E[p[-1]['parent']] + p[-1]['face_out'] - plan['segments'][p[-1]['parent']]['face_in'])}",
                         "layouts": [s["layout"] for s in p]} for lab, p in pieces]}
+    info["sync"] = qa.sync_checks(cfg, out, r["edl"], cfg["sources"]["desktop_recording"], plan["offset_s"], analysis, r["geometry"])
     json.dump(info, open(os.path.join(d, "sample.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return info

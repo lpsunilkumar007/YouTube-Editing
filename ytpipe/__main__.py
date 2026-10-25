@@ -83,6 +83,7 @@ def main(argv=None):
         r = sample.build(cfg, _j(os.path.join(P["timelines"], "timeline.json")), an(), meta(), a.len, [float(x) for x in a.at.split(",")] if a.at else None)
         print(r["file"], f"{r['duration']:.1f} s")
         for p in r["pieces"]: print(f"  {p['label']}: {p['final_video']} in the final video ({'/'.join(p['layouts'])})")
+        sc = r["sync"]; print(f"  sync: {sc['pen_strokes']['checked']} pen strokes + {sc['slide_changes']['checked']} slide changes compared;", sc["findings"] or "no lag over 1 frame")
         print("watch it, then: python -m ytpipe approve preview (or tell Claude what to change)")
     elif s in ("preview", "render"):
         plan = _j(os.path.join(P["timelines"], "timeline.json")); only = [int(x) for x in a.segments.split(",")] if a.segments else None
