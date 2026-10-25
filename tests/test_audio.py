@@ -18,3 +18,15 @@ def test_narration_alignment_and_loudness(tmp_path):
     r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(tmp_path / "mix.wav"), "-af", "ebur128", "-f", "null", "-"],
                        capture_output=True, text=True).stderr
     I = float(r.split("I:")[-1].split("LUFS")[0]); assert abs(I - (-16.0)) < 1.0, I   # mono -19 duplicated -> -16 stereo
+
+def test_music_plan_follows_style_and_maps_to_samples():
+    from ytpipe import audio
+    cfg = {"audio": {"delivery_lufs": -16.0, "music": {"placement": ["intro", "chapter_breaks"], "below_voice_db": [25, 35], "duck_db": 6}}}
+    segs = [{"face_in": 1.0, "face_out": 50.0}, {"face_in": 52.0, "face_out": 90.0}]
+    secs = audio.music_plan(cfg, segs, [(1.0, "Intro"), (60.0, "Next")], [[30.0, 31.0], [59.2, 60.4]])
+    assert secs[0][:3] == (1.0, 9.0, 0.0)                               # under the opening shot, from the track start
+    assert abs((secs[1][0] + secs[1][1]) / 2 - 59.8) < 1e-9             # swell centred on the pause at the chapter
+    full = audio.to_edit(secs, [(1.0, 50.0, 0.0), (52.0, 90.0, 49.0)])
+    part = audio.to_edit(secs, [(58.0, 62.0, 0.0)])                     # a sample piece around the chapter break
+    f = next(x for x in full if x[0] > 40); p = part[0]
+    assert abs((f[2] + (58.0 - (f[0] - 49.0 + 52.0))) - p[2]) < 1e-9   # same track position at the same face moment
