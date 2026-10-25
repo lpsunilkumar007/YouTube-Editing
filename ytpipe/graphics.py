@@ -134,9 +134,11 @@ def render_elements(cfg, elements, force=False):
     res = {}
     for el in elements:
         cid, html = element_html(el); open(os.path.join(proj, cid + ".html"), "w", encoding="utf-8").write(html)
-        mov = os.path.join(out, cid + ".mov"); res[el["start"]] = mov
-        if os.path.exists(mov) and not force: continue
+        mov = os.path.join(out, cid + ".mov"); res[el["start"]] = mov; src = mov + ".src"
+        import hashlib; key = hashlib.sha256(html.encode("utf-8")).hexdigest()          # reuse only if the text/design is unchanged
+        if os.path.exists(mov) and not force and os.path.exists(src) and open(src).read() == key: continue
         r = subprocess.run(["npx.cmd" if os.name == "nt" else "npx", "hyperframes", "render", proj, "-c", cid + ".html", "--format", "mov",
                             "-o", mov, "--quiet"], cwd=HF_INSTALL, capture_output=True, text=True)
         if not (os.path.exists(mov) and os.path.getsize(mov)): raise RuntimeError(f"HyperFrames failed for {cid}: {r.stderr[-400:]}")
+        open(src, "w").write(key)
     return res

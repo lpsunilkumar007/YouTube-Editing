@@ -58,7 +58,8 @@ def candidates(cfg, lines, edl, glossary_terms, chapters=()):
         if len(picked) == cfg["shorts"]["max_candidates"]: break
     for c in picked:
         segs = [s for s in edl if s["edit_start"] < c["end"] and s["edit_start"] + s["frames"] / 30 > c["start"]]
-        c["layout"] = "desktop + face circle" if any(s["layout"] != "A" for s in segs) else "face only (9:16 face crop)"
+        c["layout"] = ("split: desktop on top, presenter rectangle below (no circle: long-form only)" if any(s["layout"] != "A" for s in segs)
+                       else "full-frame presenter (9:16 face crop)")
     return sorted(picked, key=lambda c: c["start"])
 
 def report(cfg, cands, chapters, path):
