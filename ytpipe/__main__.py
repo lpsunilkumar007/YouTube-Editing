@@ -6,6 +6,8 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   sync        offset/drift -> analysis/sync.json + reports/synchronization_report.md (stops with 'needs_input' if unsure)
   transcribe  faster-whisper words (once) -> transcripts/words.json + transcript_draft.txt (to be corrected)
   analyze     slide area, slide changes, counter, ink, content masks, speech map, face track
+  retakes     spoken cut instructions + repeated starts -> timelines/content_cuts.json, reports/content_cuts.md
+              (review: apply true/false per cut); the timeline proposal removes the applied ones
   timeline    proposal -> timelines/timeline.json (review/edit, then: approve timeline)
   sample      ~15 s review clip (presenter, slide, cut; --at 30,95 picks final-video seconds, --len 5) with the final
               settings -> full_video/sample/sample.mp4, after 'timeline' approval (review it, then: approve preview)
@@ -56,14 +58,26 @@ def main(argv=None):
         r = sync.run(cfg, meta())["result"]; print(json.dumps(r, indent=1))
         if r["status"] != "ok": sys.exit("sync needs your input: see reports/synchronization_report.md, then set sync.manual_offset_s")
     elif s == "transcribe":
-        w = transcript.transcribe(cfg, cfg["sources"]["face_camera"], os.path.join(P["transcripts"], "words.json"))
+        ep = os.path.join(A, "speech_env.npy")              # after 'analyze': decode only the speech, in chunks
+        wj = os.path.join(P["transcripts"], "words.json")
+        w = transcript.transcribe(cfg, cfg["sources"]["face_camera"], wj, np.load(ep) if os.path.exists(ep) else None)
+        if transcript.drop_hallucinations(w): json.dump(w, open(wj, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+        if "repaired" not in w:                              # garbled ASR stretches: decoded again on their own, or marked unclear
+            w = transcript.repair(cfg, cfg["sources"]["face_camera"], w); json.dump(w, open(wj, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
         dr = os.path.join(P["transcripts"], "transcript_draft.txt"); transcript.draft_from_words(w, off(), dr)
         print("draft:", dr, "-> correct it (glossary, Hinglish) and save as transcripts/transcript.txt")
     elif s == "analyze": r = analyze.run(cfg, meta()); print(json.dumps({k: r[k] for k in ("slide_area", "slide_changes", "counter_box")}, indent=1), len(r["ink"]), "ink events")
     elif s == "timeline":
         lines = transcript.parse(os.path.join(P["transcripts"], "transcript.txt")) if os.path.exists(os.path.join(P["transcripts"], "transcript.txt")) else []
-        t = timeline.propose(cfg, an(), lines, off(), os.path.join(P["timelines"], "timeline.json"))
+        cc = os.path.join(P["timelines"], "content_cuts.json")
+        rm = [(c["face_in"], c["face_out"], {k: c[k] for k in ("reason", "confidence")}) for c in (_j(cc) if os.path.exists(cc) else []) if c["apply"]]
+        t = timeline.propose(cfg, an(), lines, off(), os.path.join(P["timelines"], "timeline.json"), rm)
+        if rm: print(len(rm), "content cuts applied,", round(sum(b - a for a, b, _ in rm), 1), "s removed (timelines/content_cuts.json)")
         print(len(t["segments"]), "segments,", len(t["restart_flags"]), "restart flags,", t["removed_dead_air_s"], "s dead air removed (proposal)")
+    elif s == "retakes":
+        from . import retakes
+        cuts, out, rp = retakes.run(cfg, _j(os.path.join(P["transcripts"], "words.json")))
+        print(len(cuts), "proposed cuts,", sum(c["apply"] for c in cuts), "applied,", round(sum(c["face_out"] - c["face_in"] for c in cuts if c["apply"]), 1), "s:", rp)
     elif s == "sample":
         from . import sample
         r = sample.build(cfg, _j(os.path.join(P["timelines"], "timeline.json")), an(), meta(), a.len, [float(x) for x in a.at.split(",")] if a.at else None)

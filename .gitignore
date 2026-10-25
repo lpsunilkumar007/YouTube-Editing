@@ -60,3 +60,9 @@ desktop.ini
 # --- Secrets (none today; keep any future keys out) ---
 .env
 *.key
+
+# recordings dropped in the project root by mistake (originals belong in lessons/<id>/raw/)
+/*.MOV
+/*.mov
+/*.mkv
+/*.mp4
