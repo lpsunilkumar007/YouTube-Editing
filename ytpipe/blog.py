@@ -157,7 +157,8 @@ def document(cfg, inp, cover=None):
                                          (f"from [{mm(t0)}]({at(t0)}) in the full video" if vid else f"from {mm(t0)} in the full video") if t0 is not None else "") if x)
             return f"- {name} ({info})"
         doc.append(("h2", "Watch the short versions"))
-        doc.append(("block", "Short on time? These Shorts from this lesson each make one point in under a minute."))
+        quick = "in under a minute" if all(sec and sec <= 60 for _, _, sec in shorts) else "in a minute or so"   # say only what is true
+        doc.append(("block", f"Short on time? These Shorts from this lesson each make one point {quick}."))
         doc.append(("block", "\n".join(line(k, *s) for k, s in enumerate(shorts))))
     if inp.get("takeaways"):
         doc.append(("h2", "Key takeaways")); doc.append(("block", "\n".join(f"- {t}" for t in inp["takeaways"])))
