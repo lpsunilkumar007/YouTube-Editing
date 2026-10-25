@@ -11,7 +11,7 @@ All commands take the form `python -m ytpipe <stage> --config lessons\<id>\video
 | 3 | Synchronise: metadata, then audio cross-correlation (start/middle/end + drift) when possible. **If unsure: stop and ask** for confirmation (set `sync.manual_offset_s`) | `sync` | `reports\synchronization_report.md` |
 | 4 | Transcribe once, then correct the draft into Hinglish `transcript.txt` (glossary terms, `≈`/`[unclear]` markers); then analyse slides, counter, ink, pauses and face | `transcribe`, `analyze` | `transcripts\`, `analysis\` |
 | 5 | Timeline proposal: keeps at measured pauses, A/B/C layouts, zoom candidates (clearance-checked), restart flags. Claude adds chips, graphics and chapter markers from the transcript. **⛔ `timeline`** | `timeline` | `timelines\timeline.json` |
-| 6 | Short preview of representative segments. **⛔ `preview` / style** | `preview --segments …` | `full_video\work\seg_*.mkv` |
+| 6 | ~15 s review sample: presenter, a slide with the circle camera and chips, and a cut, rendered with the final settings (about 25 s). Pick other moments with `--at <final-video seconds>`. Re-run after each change. **⛔ `preview` / style** | `sample` (or `preview --segments …`) | `full_video\sample\sample.mp4`, `sample.json` |
 | 7 | Full render. **⛔ `full_render`** must be given first. Includes desktop frame-timing, joint, loudness and decode QA | `render` | `full_video\<id>.mp4`, `timelines\edl.json`, `reports\qa_full_video.json` |
 | 8 | Subtitles and publishing metadata. Claude writes `description_input.json` from `content_brief.md` | `captions`, `metadata` | SRT, captions review, `metadata\*` |
 | 9 | Three thumbnail options. **⛔ `thumbnail`** (you choose) | `thumbnails` | `thumbnails\thumbnail_option_1..3.png` |

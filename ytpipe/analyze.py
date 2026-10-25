@@ -15,7 +15,6 @@ from . import media
 AW, AH = 480, 270          # analysis resolution for the desktop (16:9)
 
 def _red(f):
-    f = f.astype(np.int16)
     return (f[..., 0] > 150) & (f[..., 1] < 90) & (f[..., 2] < 100)
 
 def sample_desktop(path, dur, fps=2.0):
@@ -133,6 +132,10 @@ def face_track(path, dur, every=0.5, w=960, h=540, vf_pre=""):
 def run(cfg, meta, steps=("desktop", "speech", "face")):
     A = cfg["paths"]["analysis"]; os.makedirs(A, exist_ok=True); res = {}
     desk = cfg["sources"]["desktop_recording"]; ddur = meta["desktop_recording"]["duration"]
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(2)                      # face and speech decode while the desktop is analysed
+    face = pool.submit(face_track, cfg["sources"]["face_camera"], meta["face_camera"]["duration"]) if "face" in steps else None
+    speech = pool.submit(speech_map, cfg["sources"]["face_camera"], 0) if "speech" in steps else None
     if "desktop" in steps:
         fr = sample_desktop(desk, ddur, 2.0)
         area = slide_area(fr) if cfg["layout"]["slide_area"] == "auto" else cfg["layout"]["slide_area"]
@@ -140,13 +143,13 @@ def run(cfg, meta, steps=("desktop", "speech", "face")):
         cb = counter_box(desk, ddur, ch, area) if cfg["layout"]["counter"] == "auto" else cfg["layout"]["counter"]
         masks = content_masks(fr, 2.0, ch, ddur)
         np.savez_compressed(os.path.join(A, "content_masks.npz"), *masks)
-        res.update(slide_area=area, slide_changes=ch, counter_box=cb, ink=ink_events(desk, ddur))
+        res.update(slide_area=area, slide_changes=ch, counter_box=cb, ink=ink_events(desk, ddur)); del fr
     if "speech" in steps:
-        env = speech_map(cfg["sources"]["face_camera"], 0)
+        env = speech.result()
         np.save(os.path.join(A, "speech_env.npy"), env.astype(np.float32))
         res["pauses"] = pauses(env, cfg["editing"]["speech_threshold_dbfs"])
     if "face" in steps:
-        np.save(os.path.join(A, "face_track.npy"), face_track(cfg["sources"]["face_camera"], meta["face_camera"]["duration"]))
+        np.save(os.path.join(A, "face_track.npy"), face.result())
     old = {}
     p = os.path.join(A, "analysis.json")
     if os.path.exists(p): old = json.load(open(p, encoding="utf-8"))

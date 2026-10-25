@@ -7,6 +7,8 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   transcribe  faster-whisper words (once) -> transcripts/words.json + transcript_draft.txt (to be corrected)
   analyze     slide area, slide changes, counter, ink, content masks, speech map, face track
   timeline    proposal -> timelines/timeline.json (review/edit, then: approve timeline)
+  sample      ~15 s review clip (presenter, slide, cut; --at 30,95 picks final-video seconds, --len 5) with the final
+              settings -> full_video/sample/sample.mp4, after 'timeline' approval (review it, then: approve preview)
   preview     render selected segments (--segments 0,3,7) after 'timeline' approval
   render      full video after 'full_render' approval -> full_video/<lesson>.mp4 (+ QA)
   captions    transcripts/<lesson>_hinglish.srt from transcripts/transcript.txt (+ review list)
@@ -28,7 +30,8 @@ def _j(p):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="ytpipe", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("stage"); ap.add_argument("gate", nargs="?"); ap.add_argument("--config", required=True)
-    ap.add_argument("--segments"); ap.add_argument("--clips"); ap.add_argument("--note", default=""); ap.add_argument("--force", action="store_true")
+    ap.add_argument("--segments"); ap.add_argument("--clips"); ap.add_argument("--at"); ap.add_argument("--len", type=float, default=5.0)
+    ap.add_argument("--note", default=""); ap.add_argument("--force", action="store_true")
     ap.add_argument("--final", help="package / shorts-render: an existing final video (read only, never modified)")
     ap.add_argument("--style", default="v3", help="shorts-render: v3 (lecture audio, line captions) or v4 (tightened pauses, chunk captions, music)")
     ap.add_argument("--music", help="shorts-render v4: licensed music file (record it in config/credits.json)"); ap.add_argument("--bpm", type=float)
@@ -54,6 +57,12 @@ def main(argv=None):
         lines = transcript.parse(os.path.join(P["transcripts"], "transcript.txt")) if os.path.exists(os.path.join(P["transcripts"], "transcript.txt")) else []
         t = timeline.propose(cfg, an(), lines, off(), os.path.join(P["timelines"], "timeline.json"))
         print(len(t["segments"]), "segments,", len(t["restart_flags"]), "restart flags,", t["removed_dead_air_s"], "s dead air removed (proposal)")
+    elif s == "sample":
+        from . import sample
+        r = sample.build(cfg, _j(os.path.join(P["timelines"], "timeline.json")), an(), meta(), a.len, [float(x) for x in a.at.split(",")] if a.at else None)
+        print(r["file"], f"{r['duration']:.1f} s")
+        for p in r["pieces"]: print(f"  {p['label']}: {p['final_video']} in the final video ({'/'.join(p['layouts'])})")
+        print("watch it, then: python -m ytpipe approve preview (or tell Claude what to change)")
     elif s in ("preview", "render"):
         plan = _j(os.path.join(P["timelines"], "timeline.json")); only = [int(x) for x in a.segments.split(",")] if a.segments else None
         out = os.path.join(P["full_video"], f"{cfg['project']['lesson_id']}.mp4")

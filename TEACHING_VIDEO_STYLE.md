@@ -187,7 +187,7 @@ The presenter's **red pen ink is never recoloured**, and neither are the slide o
 - **Card size:** 88 % (the largest without the circle covering content) maximises the slide size.
 - **Added text:** ≥ 20 px at 1080p. The chip text (26 px) and counter (23 px) were enlarged in v6 for phones.
 - **Zoom** only where small text matters and it is clearance-safe.
-- **Encoding:** CRF 12, no B-frames, so text edges and the camera stay clean after YouTube's re-encode.
+- **Encoding:** CRF 14, x264 preset medium, no B-frames, so text edges and the camera stay clean after YouTube's re-encode. Until 2026-10-24 it was CRF 12 / slow. On Lesson 02 the change measured 0.995 SSIM (structural similarity) against the old setting, encoded face shots about 2.5× faster and made files about 30 % smaller.
 
 ## 20. Common mistakes to avoid
 
