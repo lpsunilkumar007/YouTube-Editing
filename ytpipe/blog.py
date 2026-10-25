@@ -17,7 +17,7 @@ takeaways [str], faq [{q, a}], cta [blocks], related [{title, url}], shorts_urls
 Short, in the order listed). The "Watch the short versions" section is built from the Shorts metadata files, not typed. A block is a paragraph string; a block may also be
 "- item" lines (list), "1. item" lines (numbered), "> quote", or a ``` fenced code block. Inline: **bold**, *italic*,
 `code`, [text](url)."""
-import glob, html, json, os, re, shutil, time
+import glob, html, json, os, re, shutil, subprocess, time
 
 WPM = 230                                             # reading speed for the "N min read" line
 
@@ -95,7 +95,41 @@ def todo(inp, shorts=()):
         out.append(f"add shorts_urls (one per Short, in the order of the 'Watch the short versions' list) after uploading the {len(shorts)} Shorts")
     return out
 
-def build(cfg, inp, cover=None):
+def link_anchors(doc, links):
+    """Approved internal links [{anchor, url}]: the first plain-text occurrence of each anchor in a paragraph or list
+    becomes a link (never in headings, code, or text that is already a link). -> (doc, [anchors not found])."""
+    doc, missing = list(doc), []
+    for l in links:
+        pat = re.compile(r"(?<![\w\[])(" + re.escape(l["anchor"]) + r")(?![\w\]])", re.I)
+        for i, (k, x) in enumerate(doc):
+            if k != "block" or x.startswith("```"): continue
+            busy = [m.span() for m in re.finditer(r"\[[^\]]*\]\([^)]*\)|`[^`]*`", x)]
+            m = next((m for m in pat.finditer(x) if not any(a <= m.start() < b for a, b in busy)), None)
+            if m: doc[i] = (k, x[:m.start()] + f"[{m.group(1)}]({l['url']})" + x[m.end():]); break
+        else: missing.append(l["anchor"])
+    return doc, missing
+
+def screens(cfg, analysis, edl, out_dir):
+    """One still per slide the final video shows in a slide shot (layout B/C): the raw desktop frame 0.3 s before the
+    slide leaves its last slide shot (all its ink drawn), cropped to the slide area. Read-only on the recording; reused if
+    present. -> [{file, final_time, face_time}] (blog/screens/index.json). blog_input "images" picks which to show."""
+    idx = os.path.join(out_dir, "index.json")
+    if os.path.exists(idx): return json.load(open(idx, encoding="utf-8"))
+    os.makedirs(out_dir, exist_ok=True); off = edl["offset_s"]; x, y, w, h = analysis["slide_area"]
+    edges = [-1e9] + [t - off for t in analysis.get("slide_changes", [])] + [1e9]; out = []
+    for n, (a, b) in enumerate(zip(edges, edges[1:]), 1):
+        shown = [(max(a, s["face_in"]), min(b, s["face_out"]), s) for s in edl["segments"] if s["layout"] != "A" and min(b, s["face_out"]) - max(a, s["face_in"]) > 0.5]
+        if not shown: continue
+        lo, hi, s = shown[-1]; F = hi - 0.3; f = f"slide_{n:02d}.png"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{F + off:.3f}", "-i", cfg["sources"]["desktop_recording"], "-frames:v", "1",
+                        "-vf", f"crop={w}:{h}:{x}:{y}", os.path.join(out_dir, f)], check=True)
+        out.append({"file": f, "face_time": round(F, 2), "final_time": round(s["edit_start"] + F - s["face_in"], 2)})
+    json.dump(out, open(idx, "w", encoding="utf-8"), indent=1)
+    return out
+
+def document(cfg, inp, cover=None):
+    """The article as one ordered list of (kind, payload) that every renderer walks (Markdown, HTML, WordPress blocks),
+    plus what they share: words, reading time, cover file, video id, the lesson's Shorts, link results."""
     P = cfg["paths"]; out = os.path.join(P["root"], "blog"); os.makedirs(out, exist_ok=True); slug = inp["slug"]
     url, vid = inp.get("video_url", ""), video_id(inp.get("video_url", ""))
     ch = chapters_from(os.path.join(P["metadata"], "youtube_chapters.txt"))
@@ -104,13 +138,15 @@ def build(cfg, inp, cover=None):
     img = None
     if cover and os.path.exists(cover):
         img = f"{slug}-cover.png"; shutil.copy2(cover, os.path.join(out, img))
-    # ---- one ordered list of (kind, payload): both renderers walk it
+    figs = {}                                         # screenshots after a section heading's first block
+    for im in inp.get("images", []): figs.setdefault(im["after"], []).append(("figure", (im["file"], im["alt"], im.get("caption", ""))))
     doc = [("kicker", inp.get("kicker", "")), ("title", inp["title"]), ("subtitle", inp.get("subtitle", ""))]
     if img: doc.append(("image", (img, inp.get("cover_alt", ""))))
     doc += [("block", b) for b in inp["intro"]]
     doc.append(("video", url))
     for s in inp["sections"]:
-        doc.append(("h2", s["heading"])); doc += [("block", b) for b in s["body"]]
+        doc.append(("h2", s["heading"])); body = [("block", b) for b in s["body"]]
+        doc += body[:1] + figs.pop(s["heading"], []) + body[1:]
     if ch:
         doc.append(("h2", "Video chapters")); doc.append(("chapters", ch))
     shorts = shorts_from(P); su = inp.get("shorts_urls", [])
@@ -128,13 +164,39 @@ def build(cfg, inp, cover=None):
     if inp.get("faq"):
         doc.append(("h2", "Frequently asked questions"))
         for f in inp["faq"]: doc += [("h3", f["q"]), ("block", f["a"])]
+    if inp.get("references"):                         # external sources, checked by wp-publish --check-links
+        doc.append(("h2", "Further reading"))
+        doc.append(("block", "\n".join(f"- [{r['title']}]({r['url']})" + (f": {r['note']}" if r.get("note") else "") for r in inp["references"])))
     if inp.get("cta"):
         doc.append(("hr", None)); doc += [("block", b) for b in inp["cta"]]
     if inp.get("related"):
         doc.append(("h2", "More in this series")); doc.append(("block", "\n".join(f"- [{r['title']}]({r['url']})" for r in inp["related"])))
+    doc, missing = link_anchors(doc, inp.get("internal_links", []))
     words = sum(len(_text(x).split()) for k, x in doc if k in ("block", "h2", "h3", "title", "subtitle"))
     words += sum(len(t.split()) for k, x in doc if k == "chapters" for _, t in x)
-    mins = max(1, round(words / WPM))
+    return {"doc": doc, "words": words, "mins": max(1, round(words / WPM)), "img": img, "url": url, "vid": vid, "at": at, "mm": mm,
+            "shorts": shorts, "links_missing": missing, "dir": out}
+
+def structured_data(inp, D, image=None, canon="", kinds=("BlogPosting", "VideoObject", "FAQPage")):
+    """schema.org JSON-LD objects for the article (BlogPosting), its video (once uploaded) and its FAQ."""
+    ld, vid = [], D["vid"]
+    if "BlogPosting" in kinds:
+        ld.append({"@context": "https://schema.org", "@type": "BlogPosting", "headline": inp["seo_title"], "description": inp["meta_description"],
+                   "keywords": ", ".join(inp["tags"]), "wordCount": D["words"], "inLanguage": "en",
+                   **({"author": {"@type": "Person", "name": inp["author"]}} if inp.get("author") else {}),
+                   **({"image": image} if image else {}), **({"mainEntityOfPage": canon} if canon else {})})
+    if vid and "VideoObject" in kinds:
+        ld.append({"@context": "https://schema.org", "@type": "VideoObject", "name": inp["title"], "description": inp["meta_description"],
+                   "thumbnailUrl": f"https://i.ytimg.com/vi/{vid}/maxresdefault.jpg", "embedUrl": f"https://www.youtube.com/embed/{vid}",
+                   "contentUrl": D["url"], "uploadDate": inp.get("upload_date") or time.strftime("%Y-%m-%d")})
+    if inp.get("faq") and "FAQPage" in kinds:
+        ld.append({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+            {"@type": "Question", "name": f["q"], "acceptedAnswer": {"@type": "Answer", "text": _text(f["a"]).strip()}} for f in inp["faq"]]})
+    return ld
+
+def build(cfg, inp, cover=None):
+    D = document(cfg, inp, cover); doc, words, mins, img, url, vid, at, mm, shorts, out = (D[k] for k in (
+        "doc", "words", "mins", "img", "url", "vid", "at", "mm", "shorts", "dir")); slug = inp["slug"]
     # ---- Markdown
     md = []
     for k, x in doc:
@@ -142,6 +204,7 @@ def build(cfg, inp, cover=None):
         elif k == "title": md.append(f"# {x}")
         elif k == "subtitle" and x: md.append(f"### {x}\n\n*{mins} min read*")
         elif k == "image": md.append(f"![{x[1]}]({x[0]})")
+        elif k == "figure": md.append(f"![{x[1]}]({x[0]})" + (f"\n*{x[2]}*" if x[2] else ""))
         elif k == "video": md.append(f"**Watch the video:**\n\n{x}" if x else "**Watch the video:** _(YouTube link goes here after upload)_")
         elif k == "h2": md.append(f"## {x}")
         elif k == "h3": md.append(f"### {x}")
@@ -155,7 +218,9 @@ def build(cfg, inp, cover=None):
         if k == "kicker" and x: body.append(f'<p class="kicker">{html.escape(x)}</p>')
         elif k == "title": body.append(f"<h1>{html.escape(x)}</h1>")
         elif k == "subtitle" and x: body.append(f'<p class="subtitle">{html.escape(x)}</p><p class="meta">{mins} min read</p>')
-        elif k == "image": body.append(f'<figure><img src="{x[0]}" alt="{html.escape(x[1], quote=True)}"></figure>')
+        elif k in ("image", "figure"):
+            cap = f"<figcaption>{_inline_html(x[2])}</figcaption>" if k == "figure" and x[2] else ""
+            body.append(f'<figure><img src="{x[0]}" alt="{html.escape(x[1], quote=True)}">{cap}</figure>')
         elif k == "video":
             body.append(f'<figure class="video"><iframe src="https://www.youtube.com/embed/{vid}" title="{html.escape(inp["title"], quote=True)}" '
                         f'allowfullscreen loading="lazy"></iframe><figcaption><a href="{html.escape(x, quote=True)}">Watch on YouTube</a></figcaption></figure>'
@@ -167,18 +232,7 @@ def build(cfg, inp, cover=None):
         elif k == "hr": body.append("<hr>")
         elif k == "block": body.append(_block_html(x))
     canon = f"{inp['site_url'].rstrip('/')}/{slug}" if inp.get("site_url") else ""
-    ld = [{"@context": "https://schema.org", "@type": "BlogPosting", "headline": inp["seo_title"], "description": inp["meta_description"],
-           "keywords": ", ".join(inp["tags"]), "wordCount": words, "inLanguage": "en",
-           **({"author": {"@type": "Person", "name": inp["author"]}} if inp.get("author") else {}),
-           **({"image": f"{inp['site_url'].rstrip('/')}/{img}" if inp.get("site_url") else img} if img else {}),
-           **({"mainEntityOfPage": canon} if canon else {})}]
-    if vid:
-        ld.append({"@context": "https://schema.org", "@type": "VideoObject", "name": inp["title"], "description": inp["meta_description"],
-                   "thumbnailUrl": f"https://i.ytimg.com/vi/{vid}/maxresdefault.jpg", "embedUrl": f"https://www.youtube.com/embed/{vid}",
-                   "contentUrl": url, "uploadDate": inp.get("upload_date") or time.strftime("%Y-%m-%d")})
-    if inp.get("faq"):
-        ld.append({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
-            {"@type": "Question", "name": f["q"], "acceptedAnswer": {"@type": "Answer", "text": _text(f["a"]).strip()}} for f in inp["faq"]]})
+    ld = structured_data(inp, D, (f"{inp['site_url'].rstrip('/')}/{img}" if inp.get("site_url") else img) if img else None, canon)
     esc = lambda s: html.escape(s, quote=True)
     head = (f"<title>{esc(inp['seo_title'])}</title>\n<meta name=\"description\" content=\"{esc(inp['meta_description'])}\">\n"
             + (f"<link rel=\"canonical\" href=\"{esc(canon)}\">\n" if canon else "")
@@ -200,7 +254,10 @@ def build(cfg, inp, cover=None):
             f"{head}<style>{css}</style>\n</head>\n<body>\n<!-- ARTICLE START: select from here when pasting into Medium or a CMS -->\n<article>\n"
             + "\n".join(body) + "\n</article>\n<!-- ARTICLE END -->\n</body>\n</html>\n")
     open(os.path.join(out, f"{slug}.html"), "w", encoding="utf-8").write(page)
-    probs = check(inp, words); later = todo(inp, shorts)
+    probs = check(inp, words) + [f"internal link anchor not found in the text: {a!r}" for a in D["links_missing"]]
+    probs += [f"image missing: {im['file']}" for im in inp.get("images", []) if not os.path.exists(os.path.join(out, im["file"]))]
+    probs += [f"image after unknown section heading: {im['after']!r}" for im in inp.get("images", []) if im["after"] not in [s["heading"] for s in inp["sections"]]]
+    later = todo(inp, shorts)
     seo = ["SEO FIELDS (paste into your CMS / Medium story settings)", "",
            f"SEO title ({len(inp['seo_title'])} chars):", inp["seo_title"], "",
            f"Meta description ({len(inp['meta_description'])} chars):", inp["meta_description"], "",

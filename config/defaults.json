@@ -263,5 +263,17 @@
     "decode_check": true,
     "pre_render_frame_check": true,
     "joint_qc_on_narration_stem": true
+  },
+  "wordpress": {
+    "_note": "Set site_url, kind and category per your site (never guessed). Credentials live in the macOS Keychain, not here.",
+    "site_url": null,
+    "kind": null,
+    "username": null,
+    "category": null,
+    "author_id": null,
+    "seo_plugin": "auto",
+    "structured_data": "auto",
+    "internal_links_max": 5,
+    "keychain_service": "ytpipe-wordpress"
   }
 }

@@ -3,7 +3,7 @@ restartable and idempotent (a stage reruns only if forced or its inputs changed)
 same way and can only be set by an explicit CLI command from the user (`python -m ytpipe approve <gate>`)."""
 import hashlib, json, os, time
 
-GATES = ("timeline", "preview", "full_render", "thumbnail", "shorts", "paid_assets")
+GATES = ("timeline", "preview", "full_render", "thumbnail", "shorts", "paid_assets", "blog_publish")
 
 def _path(cfg):
     return os.path.join(cfg["paths"]["root"], "state.json")

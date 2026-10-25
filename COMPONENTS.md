@@ -28,6 +28,8 @@
 | 20 | YouTube metadata | `metadata` | **Produced for Lesson 01** (placeholders remain for your links) |
 | 21 | Shorts/Reels | `shorts` (candidates, report); **`shorts_v3`** (render: B full-frame presenter / A rectangular split / C desktop focus, automatic layout plan, term-highlighted captions; **no circular overlay**) | v3 validated on Lesson 01: `output\shorts_layout_preview.mp4` (picture 0 frames vs the original camera, audio within 0.3 ms). `shorts_v2` (circle) and the v1 reframing are **retired** for vertical video |
 | 22 | Publishing package | `publish` | Built for Lesson 01 (no video copied) |
+| 23 | Blog article | `blog` (Markdown, HTML, SEO checks, slide stills, Shorts, references, internal links) | **Produced for Lesson 02** |
+| 24 | WordPress draft | `wordpress` (`wp-publish` dry run / `--send` after `blog_publish`, `wp-check`): drafts only, Keychain credentials | Tested against a fake WordPress; **no real site connected yet** |
 
 ### Gaps that remain
 1. **Timeline layouts are heuristic:** a face shot when there is no desktop activity, a slide shot otherwise. Expect to adjust the proposal at the timeline gate. Chips, graphics and chapter markers are written by Claude from the transcript.

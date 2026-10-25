@@ -14,6 +14,10 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   captions    transcripts/<lesson>_hinglish.srt from transcripts/transcript.txt (+ review list)
   metadata    chapters/description/tags/hashtags/pinned comment from metadata/description_input.json
   blog        Medium-style SEO article from metadata/blog_input.json -> blog/<slug>.md, .html, SEO.txt (+ cover)
+  wp-publish  WordPress DRAFT of the blog post: dry run by default (blog/wordpress/dry_run.md: everything that would be
+              sent, internal-link suggestions, outreach.md); --check-links verifies external references; --send uploads
+              after 'blog_publish' approval of the dry run's payload hash. Never publishes; public posts are never changed
+  wp-check    read-only connection test of the configured WordPress site (user, rights, SEO plugin, categories)
   thumbnails  3 options from thumbnails/thumbnail_input.json (choose, then: approve thumbnail)
   shorts      candidate report (no rendering) -> shorts/shorts_candidate_report.md
   shorts-render  render approved clips (--clips 1,3) after 'shorts' approval
@@ -34,6 +38,7 @@ def main(argv=None):
     ap.add_argument("stage"); ap.add_argument("gate", nargs="?"); ap.add_argument("--config", required=True)
     ap.add_argument("--segments"); ap.add_argument("--clips"); ap.add_argument("--at"); ap.add_argument("--len", type=float, default=5.0)
     ap.add_argument("--note", default=""); ap.add_argument("--force", action="store_true")
+    ap.add_argument("--send", action="store_true"); ap.add_argument("--check-links", action="store_true")
     ap.add_argument("--final", help="package / shorts-render / qa: an existing final video (read only, never modified)")
     ap.add_argument("--style", default="v3", help="shorts-render: v3 (lecture audio, line captions) or v4 (tightened pauses, chunk captions, music)")
     ap.add_argument("--music", help="shorts-render v4: licensed music file (record it in config/credits.json)"); ap.add_argument("--bpm", type=float)
@@ -87,9 +92,34 @@ def main(argv=None):
         from . import blog
         inp = os.path.join(P["metadata"], "blog_input.json")
         if not os.path.exists(inp): sys.exit(f"write {inp} from metadata/content_brief.md first (fields: see ytpipe/blog.py)")
-        th = publish._thumbnails(cfg, state.load(cfg)); r = blog.build(cfg, _j(inp), th[0] if th else None)
+        th = publish._thumbnails(cfg, state.load(cfg))
+        if os.path.exists(os.path.join(A, "analysis.json")) and os.path.exists(os.path.join(P["timelines"], "edl.json")):
+            sc = blog.screens(cfg, an(), edl(), os.path.join(P["root"], "blog", "screens"))   # slide stills for "images"
+            print(len(sc), "slide stills in blog/screens (pick them in blog_input images)")
+        r = blog.build(cfg, _j(inp), th[0] if th else None)
         print(r["dir"], r["files"], f"{r['words']} words, {r['minutes']} min read"); print("checks:", r["problems"] or "pass")
         for m in r["todo"]: print("to do:", m)
+    elif s in ("wp-publish", "wp-check"):
+        from . import blog, wordpress
+        W = cfg["wordpress"]; client = None
+        if s == "wp-check": print(json.dumps(wordpress.check(wordpress.connect(cfg)), indent=1, ensure_ascii=False)); return
+        inp = _j(os.path.join(P["metadata"], "blog_input.json")); th = publish._thumbnails(cfg, state.load(cfg))
+        blog.build(cfg, inp, th[0] if th else None); D = blog.document(cfg, inp, th[0] if th else None)
+        if W.get("site_url"):
+            try: client = wordpress.connect(cfg)
+            except wordpress.WPError as e:
+                if a.send: sys.exit(str(e))
+                print("offline dry run:", e)
+        if not a.send:
+            r = wordpress.dry_run(cfg, inp, D, client, a.check_links)
+            print(os.path.join(r["dir"], "dry_run.md")); print("payload", r["hash"], "|", len(r["suggestions"]), "internal link suggestions")
+            for w in r["warnings"]: print("warning:", w)
+            print(f"review it, then: python -m ytpipe approve blog_publish --note payload:{r['hash']}  (and rerun with --send)")
+        else:
+            if client is None: sys.exit("wordpress.site_url is not set")
+            state.require(cfg, "blog_publish")
+            r = wordpress.send(cfg, inp, D, client, state.load(cfg)["approvals"]["blog_publish"].get("note", ""), a.force)
+            print(json.dumps(r, indent=1, ensure_ascii=False)); print("open the draft, check it, and press Publish in WordPress yourself")
     elif s == "thumbnails":                                   # v2: face analysis (cached) + HTML/CSS premium layouts
         from . import faces, thumbs_v2
         E = edl(); fa = os.path.join(P["thumbnails"], "face_analysis.json")
