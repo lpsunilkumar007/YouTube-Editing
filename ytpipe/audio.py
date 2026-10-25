@@ -76,15 +76,16 @@ def music_plan(cfg, segs, chapters, pauses, intro_s=8.0, swell_s=4.0, outro_s=6.
     -16 LUFS delivery voice, before the bed offset and the duck_db speech ducking), None = silent."""
     M = cfg["audio"]["music"]; L = cfg["audio"]["delivery_lufs"] - M["below_voice_db"][0] + M["duck_db"]   # measured 25-35 dB under the voice (Lesson 02)
     a, z = segs[0]["face_in"], segs[-1]["face_out"]; out = []; h = swell_s / 2
+    n = len(ff_float(["-i", M["file"]], 1)) / SR if M.get("file") else None              # swells wrap inside the track
+    room = max(1.0, n - outro_s - swell_s - 1.0) if n else float("inf")
     if "intro" in M["placement"]:
         out.append((a, a + intro_s, 0.0, [(a, None), (a + 0.8, L), (a + intro_s - 2.5, L), (a + intro_s, None)]))
     if "chapter_breaks" in M["placement"]:
         for c, _ in chapters[1:]:
             near = [p for p in pauses if p[0] <= c + 0.5 and p[1] >= c - 3.0]   # the pause that opens the chapter
             p = min(near, key=lambda p: abs((p[0] + p[1]) / 2 - c)) if near else None; m = (p[0] + p[1]) / 2 if p else c
-            out.append((m - h, m + h, m - h, [(m - h, None), (m, L), (m + h, None)]))
+            out.append((m - h, m + h, (m - h) % room, [(m - h, None), (m, L), (m + h, None)]))
     if "outro" in M["placement"]:
-        n = len(ff_float(["-i", M["file"]], 1)) / SR
         out.append((z - outro_s, z, n - outro_s - 0.5, [(z - outro_s, None), (z - outro_s + 2.0, L), (z, L)]))
     return out
 

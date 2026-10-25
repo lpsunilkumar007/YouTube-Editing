@@ -31,6 +31,7 @@ def test_music_level_and_placement(tmp_path):
     m = qa.music(cfg, p, 60.0); k = [s["kind"] for s in m["sections"]]
     assert k == ["intro", "swell", "swell", "outro"], m
     assert 25 <= m["sections"][0]["below_voice_db"] <= 35, m
+    assert any("planned music 20.0-24.0 s is silent" in x for x in qa.music(cfg, p, 60.0, [[0.5, 7.5], [20.0, 24.0]])["findings"])
     assert len(m["findings"]) == 2 and "mid-video at 40.0" in m["findings"][0] and "outro" not in m["findings"][1] and "55.0" in m["findings"][1], m
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(ROOT, "lessons", "lesson01", "video_project_config.json")),
