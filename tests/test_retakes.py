@@ -42,3 +42,10 @@ def test_writing_silences_are_not_dead_air():
     pauses = [(10.0, 13.0), (20.0, 23.0)]                                      # both longer than max_dead 1.5 s
     k = timeline.keeps(pauses, 0.0, 30.0, protect=[(20.5, 22.0)])             # the presenter writes during the second
     assert len(k) == 2 and k[0][1] < 11 and k[1][0] > 12 and k[1][1] > 29      # first silence cut, second kept whole
+
+def test_cut_through_writing_gets_a_cutaway():
+    segs = [{"layout": "B", "face_in": 0.0, "face_out": 10.0}, {"layout": "B", "face_in": 13.0, "face_out": 30.0}]
+    out, done = timeline.cutaways(segs, [(10.0, 13.0, {})], [{"start": 11.0, "end": 11.5}], [(15.0, 15.5)])
+    assert done == [13.0] and [s["layout"] for s in out] == ["B", "A", "B"] and abs(out[1]["face_out"] - 15.25) < 1 / 30
+    out2, done2 = timeline.cutaways(segs, [(10.0, 13.0, {})], [{"start": 20.0, "end": 21.0}], [(15.0, 15.5)])
+    assert done2 == [] and len(out2) == 2                                         # no writing inside the cut: no cut-away

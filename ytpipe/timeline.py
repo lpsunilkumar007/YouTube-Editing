@@ -37,6 +37,19 @@ def remove(keep_list, removals, fps=30):
         out += [(snap(p0, fps), snap(p1, fps)) for p0, p1 in parts]
     return [(x, y) for x, y in out if y - x > 0.5]
 
+def cutaways(segments, removals, ink, pauses, fps=30, min_s=1.5, max_s=4.0):
+    """A content cut that removes pen writing would make the ink jump on the slide. The slide shot after such a cut
+    starts on the presenter (layout A) until the first pause >= 0.3 s after min_s (at most max_s), so the ink changes
+    off screen. Returns the new segment list and the face times of the cut-aways."""
+    out, done = [], []
+    for s in segments:
+        r = next((r for r in removals if abs(s["face_in"] - r[1]) < 0.05 and any(r[0] < e["start"] < r[1] or r[0] < e["end"] < r[1] for e in ink)), None)
+        if r and s["layout"] != "A":
+            t = next((round((p0 + p1) / 2, 2) for p0, p1 in pauses if p1 - p0 >= 0.3 and s["face_in"] + min_s <= (p0 + p1) / 2 <= s["face_in"] + max_s), s["face_in"] + max_s / 2)
+            t = snap(min(t, s["face_out"]), fps); out += [dict(s, layout="A", face_out=t), dict(s, face_in=t)]; done.append(s["face_in"]); continue
+        out.append(s)
+    return [s for s in out if s["face_out"] - s["face_in"] > 0.01], done
+
 def restarts(lines, n=2):
     flags = []
     for a, b in zip(lines, lines[1:]):
@@ -87,6 +100,7 @@ def propose(cfg, analysis, lines, offset, out_json, removals=()):
     shots = layouts(kl, pauses, sc, ink)
     for s in shots:
         s["face_in"], s["face_out"] = snap(s["face_in"], fps), snap(s["face_out"], fps)
+    shots, _ = cutaways(shots, removals, ink, pauses, fps)
     area = analysis["slide_area"]
     plan = {"status": "PROPOSAL - review, edit and approve (python -m ytpipe approve timeline)", "offset_s": offset,
             "keeps": kl, "segments": shots, "zoom_candidates": zoom_candidates(shots, ink, [area[0], area[1], area[2] - area[0], area[3] - area[1]]),
