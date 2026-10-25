@@ -49,3 +49,19 @@ def test_checkpoints_and_gates(tmp_path):
     assert not state.done(c, "inspect", fp); state.mark(c, "inspect", fp); assert state.done(c, "inspect", fp)
     with pytest.raises(PermissionError): state.require(c, "full_render")
     state.approve(c, "full_render"); state.require(c, "full_render")
+
+def test_blog_builds_and_checks_seo(tmp_path):
+    from ytpipe import blog
+    cfg = {"paths": {"root": str(tmp_path), "metadata": str(tmp_path)}}
+    (tmp_path / "youtube_chapters.txt").write_text("0:00 Intro\n1:05 Flowcharts\n")
+    para = "How to start programming: " + "word " * 120
+    inp = {"title": "How to Start Programming", "slug": "how-to-start-programming", "focus_keyword": "how to start programming",
+           "seo_title": "How to Start Programming: Flowchart First", "meta_description": "How to start programming: " + "x" * 110,
+           "tags": ["a", "b"], "cover_alt": "cover", "video_url": "https://youtu.be/abcdefghijk", "intro": [para],
+           "sections": [{"heading": "How to start programming on paper", "body": [para] * 6 + ["- one\n- two", "```\nSTART\nEND\n```"]}],
+           "faq": [{"q": "Q?", "a": "A **bold** answer."}]}
+    r = blog.build(cfg, inp)
+    assert r["problems"] == [] and r["todo"] and r["words"] > 800
+    h = (tmp_path / "blog" / "how-to-start-programming.html").read_text()
+    assert "youtube.com/embed/abcdefghijk" in h and "&t=65s" in h and '"FAQPage"' in h and "<strong>bold</strong>" in h
+    inp["seo_title"] = "x" * 70; assert any("SEO title" in p for p in blog.check(inp, 900))

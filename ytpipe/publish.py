@@ -37,6 +37,7 @@ def build(cfg, final_video=None):
              "shorts": _shorts(P["shorts"])
                        + sorted(glob.glob(os.path.join(P["shorts"], "*.md"))),
              "shorts metadata": sorted(glob.glob(os.path.join(P["metadata"], "shorts", "*.md")) + glob.glob(os.path.join(P["shorts"], "metadata", "*.md"))),
+             "blog": sorted(f for f in glob.glob(os.path.join(P["root"], "blog", "*")) if os.path.isfile(f)),
              "reports": sorted(glob.glob(os.path.join(P["reports"], "*.md")))}
     qa = {os.path.basename(f)[3:-5]: json.load(open(f, encoding="utf-8")) for f in glob.glob(os.path.join(P["reports"], "qa_*.json"))}
     lines = [f"# Publishing package: {cfg['project']['lecture_topic']}", "", f"Built {time.strftime('%Y-%m-%d %H:%M')}. Files are copies.", "",
@@ -81,5 +82,8 @@ def upload_copy(cfg, items, path):
                 "INSTAGRAM REEL CAPTION", "-" * 40, c.group(1).strip() if c else "", "-" * 40, "", "COVER FRAME", cov.strip(), ""]
     if items["shorts"]:
         out += ["SHORT VIDEO FILES (in order)", *[f"- {f}" for f in items["shorts"] if f.endswith(".mp4")], ""]
+    if items.get("blog"):
+        out += [bar, "BLOG POST", bar, "", "Files: " + ", ".join(os.path.basename(f) for f in items["blog"]),
+                "Open the .html in a browser, select the article, paste it into Medium or your site's editor; SEO fields are in SEO.txt.", ""]
     out += [bar, "BEFORE YOU PUBLISH: go through PUBLISHING_CHECKLIST.md. Keep every music credit: CC BY requires it.", bar]
     open(path, "w", encoding="utf-8").write("\n".join(out) + "\n")

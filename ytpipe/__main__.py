@@ -13,6 +13,7 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   render      full video after 'full_render' approval -> full_video/<lesson>.mp4 (+ QA)
   captions    transcripts/<lesson>_hinglish.srt from transcripts/transcript.txt (+ review list)
   metadata    chapters/description/tags/hashtags/pinned comment from metadata/description_input.json
+  blog        Medium-style SEO article from metadata/blog_input.json -> blog/<slug>.md, .html, SEO.txt (+ cover)
   thumbnails  3 options from thumbnails/thumbnail_input.json (choose, then: approve thumbnail)
   shorts      candidate report (no rendering) -> shorts/shorts_candidate_report.md
   shorts-render  render approved clips (--clips 1,3) after 'shorts' approval
@@ -83,6 +84,13 @@ def main(argv=None):
         inp = os.path.join(P["metadata"], "description_input.json")
         if not os.path.exists(inp): sys.exit(f"content brief written; now write {inp} (titles, description parts, tags) and rerun")
         paths, probs = metadata.build(cfg, ch, _j(inp)); print("\n".join(paths)); print("problems:", probs or "none")
+    elif s == "blog":
+        from . import blog
+        inp = os.path.join(P["metadata"], "blog_input.json")
+        if not os.path.exists(inp): sys.exit(f"write {inp} from metadata/content_brief.md first (fields: see ytpipe/blog.py)")
+        th = publish._thumbnails(cfg, state.load(cfg)); r = blog.build(cfg, _j(inp), th[0] if th else None)
+        print(r["dir"], r["files"], f"{r['words']} words, {r['minutes']} min read"); print("checks:", r["problems"] or "pass")
+        for m in r["todo"]: print("to do:", m)
     elif s == "thumbnails":                                   # v2: face analysis (cached) + HTML/CSS premium layouts
         from . import faces, thumbs_v2
         E = edl(); fa = os.path.join(P["thumbnails"], "face_analysis.json")
