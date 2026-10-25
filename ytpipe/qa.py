@@ -9,14 +9,15 @@ def _save(cfg, name, data):
     json.dump(data, open(os.path.join(cfg["paths"]["reports"], f"qa_{name}.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return data
 
-def loudness(path):
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", "ebur128=peak=true", "-f", "null", "-"],
-                       capture_output=True, text=True).stderr
+def loudness(path, ss=None, t=None):
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", *(["-ss", f"{ss:.3f}", "-t", f"{t:.3f}"] if t else []), "-i", path,
+                        "-af", "ebur128=peak=true", "-f", "null", "-"], capture_output=True, text=True).stderr
     g = lambda k, u: float(r.split(k)[-1].split(u)[0])
     return {"I": g("I:", "LUFS"), "LRA": g("LRA:", "LU"), "TP": g("Peak:", "dBFS")}
 
-def joints(stem_wav, cut_times, sr=48000):
-    """Narration stem (NOT the mix: music can mask gaps): low-audio runs > 0.5 s within +-2 s, clicks, level jumps."""
+def joints(stem_wav, cut_times, sr=48000, max_gap=0.5):
+    """Narration stem (NOT the mix: music can mask gaps): low-audio runs > max_gap within +-2 s, clicks, level jumps.
+    full_video passes max_gap = both sides' kept room tone + 0.1 s, so the pause the timeline keeps by design is no finding."""
     x = media.audio(stem_wav, sr=sr); hop, win = int(0.01 * sr), int(0.05 * sr)
     c = np.concatenate([[0], np.cumsum(x.astype(np.float64) ** 2)]); idx = np.arange(0, len(x) - win, hop)
     env = 10 * np.log10((c[idx + win] - c[idx]) / win + 1e-12); tt = (idx + win / 2) / sr; speech = np.percentile(env, 75)
@@ -26,30 +27,85 @@ def joints(stem_wav, cut_times, sr=48000):
         if (not v or i == len(low) - 1) and s is not None: runs.append((s, tt[i])); s = None
     out = []
     for T in cut_times:
-        near = [(round(a, 2), round(b, 2)) for a, b in runs if b - a > 0.5 and a < T + 2 and b > T - 2]
+        near = [(round(float(a), 2), round(float(b), 2)) for a, b in runs if b - a > max_gap and a < T + 2 and b > T - 2]
         i = int(T * sr); lb, la = media.rms_db(x[i - 480:i]), media.rms_db(x[i:i + 480])
         loc = np.sqrt(np.mean(x[i - 960:i + 960] ** 2)) + 1e-9; step = abs(float(x[i]) - float(x[i - 1])) / loc
         f = (["low gap " + str(near)] if near else []) + (["abrupt level change"] if abs(la - lb) > 20 else []) + (["click risk"] if step > 4 else [])
         if f: out.append({"cut": round(T, 2), "findings": f})
     return out
 
-def frame_timing(video, edl, desktop, offset, ink_events_desktop, g, tol_frames=1, max_checks=40):
+def frame_timing(video, edl, desktop, offset, ink_events_desktop, g, tol_frames=1, max_checks=40, fps=30):
     """At pen-moving moments, which raw desktop frame does the rendered slide card show? Compares the card (mapped back to
-    slide px) with raw frames planned-6..+6 on pixels whose ink state changes. Flags |lag| > tol_frames. Run on the
-    joined video BEFORE the final mux (pre-render check) and on the final."""
+    slide px) with raw frames planned-6..+6 on pixels whose ink state changes. Flags |lag| > tol_frames.
+    -> {"checked": moments actually compared, "lags": [...]} (checked 0 = nothing verified, not a pass)."""
     sx, sy, sw, sh = g["slide_area"]; cx, cy, cw, ch = g["card"]; out = []; n = 0
     moments = [e["start"] + 0.5 * (e["end"] - e["start"]) for e in ink_events_desktop]
     for D in moments:
         F = D - offset; seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + 0.3 <= F <= s["face_out"] - 0.3), None)
         if not seg or n >= max_checks: continue
-        n += 1; t = seg["edit_start"] + F - seg["face_in"]
-        fin = media.frames(video, t, 0.034, 480, 270, 30, vf_pre=f"crop={cw}:{ch}:{cx}:{cy}", pix="rgb24")[0].astype(np.int16)
-        seq = media.frames(desktop, D - 6 / 30, 13 / 30, 480, 270, 30, vf_pre=f"crop={sw}:{sh}:{sx}:{sy}", pix="rgb24").astype(np.int16)
+        t = seg["edit_start"] + F - seg["face_in"]
+        fin = media.frames(video, t, 1.1 / fps, 480, 270, fps, vf_pre=f"crop={cw}:{ch}:{cx}:{cy}", pix="rgb24")[0].astype(np.int16)
+        seq = media.frames(desktop, D - 6 / fps, 13 / fps, 480, 270, fps, vf_pre=f"crop={sw}:{sh}:{sx}:{sy}", pix="rgb24").astype(np.int16)
         red = (seq[..., 0] > 150) & (seq[..., 1] < 90) & (seq[..., 2] < 100); roi = red.any(0) & ~red.all(0)
         if roi.sum() < 15 or len(seq) < 13: continue
-        err = [np.abs(fin[roi] - s[roi]).mean() for s in seq]; lag = int(np.argmin(err)) - 6
-        if abs(lag) > tol_frames: out.append({"edit_time": round(t, 2), "face_time": round(F, 2), "lag_frames": lag})
-    return out
+        n += 1; err = [np.abs(fin[roi] - s[roi]).mean() for s in seq]; lag = int(np.argmin(err)) - 6
+        if abs(lag) > tol_frames: out.append({"edit_time": round(float(t), 2), "face_time": round(F, 2), "lag_frames": lag})
+    return {"checked": n, "lags": out}
+
+def _step(seq):
+    """Index k of the one clear picture change in a frame sequence (frame k differs from frame k-1), None if unclear."""
+    d = np.array([np.abs(seq[k] - seq[k - 1]).mean() for k in range(1, len(seq))])
+    if len(d) < 5: return None
+    k = int(np.argmax(d)); rest = np.delete(d, [j for j in (k - 1, k, k + 1) if 0 <= j < len(d)])
+    return k + 1 if d[k] >= 2.0 and d[k] >= 4 * max(float(np.median(rest)), 0.25) and rest.max() <= 0.5 * d[k] else None
+
+def slide_timing(video, edl, desktop, offset, changes_desktop, g, tol_frames=1, fps=30, win=0.8):
+    """Slide changes as sync anchors (for lessons without pen writing): the frame where the rendered card changes vs
+    the frame where the raw desktop changes, both searched in the same +-win window around the planned instant.
+    lag_frames as in frame_timing: shown desktop frame minus planned (negative = the slide card is behind).
+    -> {"checked", "lags"}; a change that is not one clear step in both (two changes close together) is not counted."""
+    out = []; n = 0
+    for D in changes_desktop:
+        F = D - offset; seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + win + 0.1 <= F <= s["face_out"] - win - 0.1), None)
+        if not seg: continue
+        t = seg["edit_start"] + F - seg["face_in"]
+        grab = lambda path, t0, box: media.frames(path, t0, 2 * win, 480, 270, fps, vf_pre="crop={2}:{3}:{0}:{1}".format(*box)).astype(np.int16)
+        kr, kd = _step(grab(video, t - win, g["card"])), _step(grab(desktop, D - win, g["slide_area"]))
+        if kr is None or kd is None: continue
+        n += 1
+        if abs(kd - kr) > tol_frames: out.append({"edit_time": round(float(t), 2), "face_time": round(F, 2), "lag_frames": kd - kr})
+    return {"checked": n, "lags": out}
+
+def sync_checks(cfg, video, edl, desktop, offset, analysis, g):
+    """Rendered slide shots vs the raw desktop at pen strokes and slide changes. Says so when nothing could be compared."""
+    fps, tol = cfg["output"]["fps"], cfg["sync"]["frame_check_tolerance_frames"]
+    pen = frame_timing(video, edl, desktop, offset, analysis.get("ink", []), g, tol, fps=fps)
+    sl = slide_timing(video, edl, desktop, offset, analysis.get("slide_changes", []), g, tol, fps)
+    f = [f"pen stroke lag {x}" for x in pen["lags"]] + [f"slide change lag {x}" for x in sl["lags"]]
+    if pen["checked"] + sl["checked"] == 0:
+        f.append("sync not verified: no pen stroke or slide change inside a slide shot to compare; confirm the offset by eye")
+    return {"pen_strokes": pen, "slide_changes": sl, "findings": f}
+
+def music(cfg, music_wav, duration):
+    """Music stem (written by audio.mix): each section's loudness under the -16 LUFS delivery voice (style section 14:
+    25-35 dB under, plus up to duck_db of ducking), and placement: only the intro, the outro and short chapter swells."""
+    M = cfg["audio"]["music"]; lo, hi = M["below_voice_db"]; x = media.audio(music_wav, sr=8000)
+    blk = np.abs(x[:len(x) // 80 * 80]).reshape(-1, 80).max(1) > 1e-5; runs, s = [], None   # 10 ms blocks
+    for i, v in enumerate(np.append(blk, False)):
+        if v and s is None: s = i
+        if not v and s is not None:
+            if runs and s / 100 - runs[-1][1] < 1.0: runs[-1][1] = i / 100
+            else: runs.append([s / 100, i / 100])
+            s = None
+    out, f = [], []
+    for a, b in (r for r in runs if r[1] - r[0] >= 0.5):
+        L = loudness(music_wav, a, b - a)["I"]; gap = round(cfg["audio"]["delivery_lufs"] - L, 1)
+        kind = "intro" if a < 1.0 else "outro" if b > duration - 3.0 else "swell"      # a track's own ending can fade early
+        out.append({"start": round(a, 2), "end": round(b, 2), "kind": kind, "lufs": L, "below_voice_db": gap})
+        if gap < lo - 1: f.append(f"music {a:.1f}-{b:.1f} s only {gap} dB under the voice (style: {lo}-{hi})")
+        if gap > hi + M["duck_db"] + 1: f.append(f"music {a:.1f}-{b:.1f} s is {gap} dB under the voice: barely audible")
+        if kind == "swell" and b - a > 6.0: f.append(f"music runs {b - a:.1f} s mid-video at {a:.1f} s (style: only short swells at chapter breaks)")
+    return {"sections": out, "findings": f}
 
 def captions(srt_path, duration, cfg):
     blocks = open(srt_path, encoding="utf-8").read().strip().split("\n\n"); prev = 0.0; out = []
@@ -81,7 +137,7 @@ def short(path, cfg, clip=None, env=None, parts=None):
             if k in clip and env[int(clip[k] * 100)] > cfg["editing"]["speech_threshold_dbfs"]: out.append(f"{k} {clip[k]} is inside speech")
     return out
 
-def full_video(cfg, final, edl, stem=None, cut_times=()):
+def full_video(cfg, final, edl, stem=None, cut_times=(), sync=None, music_wav=None):
     res = {"decode_errors": len(media.decode_errors(final))}
     d = float(media.probe(final)["format"]["duration"]); res["duration"] = d; res["edl_duration"] = sum(s["frames"] for s in edl) / cfg["output"]["fps"]
     res["loudness"] = loudness(final); f = []
@@ -89,6 +145,17 @@ def full_video(cfg, final, edl, stem=None, cut_times=()):
     if abs(d - res["edl_duration"]) > 0.1: f.append("duration differs from the EDL")
     if abs(res["loudness"]["I"] - cfg["audio"]["delivery_lufs"]) > 1.0: f.append(f"loudness {res['loudness']['I']} LUFS")
     if res["loudness"]["TP"] > cfg["audio"]["true_peak_dbtp"]: f.append(f"true peak {res['loudness']['TP']} dBTP")
-    if stem: res["joints"] = joints(stem, cut_times); f += [f"joint {j['cut']}: {j['findings']}" for j in res["joints"]]
+    if stem: res["joints"] = joints(stem, cut_times, max_gap=2 * cfg["editing"]["room_tone_each_side_s"][1] + 0.1); f += [f"joint {j['cut']}: {j['findings']}" for j in res["joints"]]
+    if sync: res["sync"] = sync; f += sync["findings"]
+    if music_wav and os.path.exists(music_wav): res["music"] = music(cfg, music_wav, d); f += res["music"]["findings"]
+    elif cfg["audio"]["music"]["enabled"]: res["music"] = "not checked: no music_stem.wav (render made before this check)"
     res["findings"] = f
     return _save(cfg, "full_video", res)
+
+def run_full(cfg, final, edl, offset, analysis, g, wd):
+    """Every full-video check, with the stems of the render in wd (<full_video>/work): decode, duration, loudness,
+    narration joints, sync at pen strokes and slide changes, music level and placement -> reports/qa_full_video.json."""
+    cuts = [e["edit_start"] for x, e in zip(edl, edl[1:]) if abs(x["face_out"] - e["face_in"]) > 1e-6]
+    stem = os.path.join(wd, "narration_stem.wav")
+    sync = sync_checks(cfg, final, edl, cfg["sources"]["desktop_recording"], offset, analysis, g)
+    return full_video(cfg, final, edl, stem if os.path.exists(stem) else None, cuts, sync, os.path.join(wd, "music_stem.wav"))

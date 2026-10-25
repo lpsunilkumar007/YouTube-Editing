@@ -17,7 +17,8 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   thumbnails  3 options from thumbnails/thumbnail_input.json (choose, then: approve thumbnail)
   shorts      candidate report (no rendering) -> shorts/shorts_candidate_report.md
   shorts-render  render approved clips (--clips 1,3) after 'shorts' approval
-  qa          captions / thumbnails / full video checks -> reports/qa_*.json
+  qa          captions / thumbnails checks -> reports/qa_*.json; --final <video> also re-runs the full-video checks
+              (decode, loudness, joints, sync, music) on a finished video, read only, with the stems in <its folder>/work
   package     publishing_package/ with INDEX.md
   approve     record an approval:  approve <gate> [--note "..."]   gates: timeline preview full_render thumbnail shorts paid_assets
   status      show checkpoints and approvals"""
@@ -33,7 +34,7 @@ def main(argv=None):
     ap.add_argument("stage"); ap.add_argument("gate", nargs="?"); ap.add_argument("--config", required=True)
     ap.add_argument("--segments"); ap.add_argument("--clips"); ap.add_argument("--at"); ap.add_argument("--len", type=float, default=5.0)
     ap.add_argument("--note", default=""); ap.add_argument("--force", action="store_true")
-    ap.add_argument("--final", help="package / shorts-render: an existing final video (read only, never modified)")
+    ap.add_argument("--final", help="package / shorts-render / qa: an existing final video (read only, never modified)")
     ap.add_argument("--style", default="v3", help="shorts-render: v3 (lecture audio, line captions) or v4 (tightened pauses, chunk captions, music)")
     ap.add_argument("--music", help="shorts-render v4: licensed music file (record it in config/credits.json)"); ap.add_argument("--bpm", type=float)
     ap.add_argument("--music-db", type=float, default=None, help="shorts-render v4: music level under speech (dB below the voice)")
@@ -69,10 +70,8 @@ def main(argv=None):
         out = os.path.join(P["full_video"], f"{cfg['project']['lesson_id']}.mp4")
         r = pipeline.build(cfg, plan, an(), meta(), out, only=only if s == "preview" else None, gate="timeline" if s == "preview" else "full_render")
         if s == "render":
-            ft = qa.frame_timing(r["file"], r["edl"], cfg["sources"]["desktop_recording"], off(), an()["ink"], r["geometry"])
-            cuts = [e["edit_start"] for x, e in zip(r["edl"], r["edl"][1:]) if abs(x["face_out"] - e["face_in"]) > 1e-6]
-            res = qa.full_video(cfg, r["file"], r["edl"], os.path.join(P["full_video"], "work", "narration_stem.wav"), cuts)
-            res["frame_timing"] = ft; print(json.dumps(res["findings"] + [f"frame lag {x}" for x in ft], indent=1))
+            res = qa.run_full(cfg, r["file"], r["edl"], off(), an(), r["geometry"], os.path.join(P["full_video"], "work"))
+            print(json.dumps(res["findings"], indent=1))
         else: print(r)
     elif s == "captions":
         env = np.load(os.path.join(A, "speech_env.npy")) if os.path.exists(os.path.join(A, "speech_env.npy")) else None
@@ -178,6 +177,10 @@ def main(argv=None):
         tj = os.path.join(P["thumbnails"], "thumbnails.json")
         if os.path.exists(tj): res["thumbnails"] = {os.path.basename(r["file"]): r["qa"] for r in _j(tj)}
         qa._save(cfg, "deliverables", res); print(json.dumps(res, indent=1))
+        if a.final:                                          # re-check a finished video (read only) with its render's stems
+            g = _j(os.path.join(P["timelines"], "geometry.json"))
+            r = qa.run_full(cfg, a.final, E["segments"], E["offset_s"], an(), g, os.path.join(os.path.dirname(os.path.abspath(a.final)), "work"))
+            print("full video:", json.dumps(r["findings"], indent=1))
     elif s == "package":
         fv = a.final or os.path.join(P["full_video"], f"{cfg['project']['lesson_id']}.mp4")
         print(publish.build(cfg, fv if os.path.exists(fv) else None))

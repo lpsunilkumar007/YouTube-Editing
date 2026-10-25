@@ -101,8 +101,9 @@ def _report(cfg, rep):
         lines += [f"Status {a['status']}; coarse confidence {a.get('coarse_confidence', a.get('confidence'))}; drift {a.get('drift_ppm', 'n/a')} ppm", "",
                   "| face time (s) | offset (s) | confidence |", "|---|---|---|"] + \
                  [f"| {p['face_t']} | {p['offset_s']} | {p['confidence']} |" for p in a.get("points", [])] + [""]
-    lines += ["Pre-render check: `qa.frame_timing` compares rendered slide segments against the raw desktop frames "
-              "(catches local deviations like Lesson 01's 1–3 frame lag)."]
+    lines += ["After the full render, `qa.sync_checks` compares the rendered slide shots with the raw desktop frames at pen "
+              "strokes and slide changes (catches local deviations like Lesson 01's 1–3 frame lag). If neither happens inside a "
+              "slide shot, QA says the sync is not verified: confirm the offset by eye."]
     os.makedirs(cfg["paths"]["reports"], exist_ok=True)
     with open(os.path.join(cfg["paths"]["reports"], "synchronization_report.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

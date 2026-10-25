@@ -2,7 +2,7 @@
 (read-only use of _work/slide_content.npz); (2) A/B/C segments render from synthetic fixtures with correct size, frame
 count, no decode errors, circle placed where the geometry says."""
 import os
-import numpy as np
+import numpy as np, pytest
 from ytpipe import config, layout, render, sources, analyze, media
 from tests.test_core import make_cfg
 
@@ -15,6 +15,10 @@ def test_geometry_reproduces_lesson01():
     assert g["camera"] == [1528, 688, 368]                      # approved circle
     assert g["bar"][:2] == [24, 995] and g["bar"][2] == 1460    # approved chip bar
     assert g["counter"]["hidden_by_camera"]
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(ROOT, "_work", "slide_content.npz")), reason="Lesson 01 analysis (_work) is not in this copy")
+def test_geometry_lesson01_content_clearance():
+    cfg = make_cfg(os.path.join(ROOT, "tests", "_tmp"))
     # with Lesson 01's worst-case content masks the clearance rule is stricter than the hand check of v6: the leftover
     # pre-camera ink on slides 1-2 reaches ~10 px under the circle at 0.88, so the card is shrunk until nothing is covered
     d = np.load(os.path.join(ROOT, "_work", "slide_content.npz")); masks = [d[k] > 0 for k in d.files if not k.startswith("n")]

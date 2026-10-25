@@ -136,20 +136,23 @@ def run(cfg, meta, steps=("desktop", "speech", "face")):
     pool = ThreadPoolExecutor(2)                      # face and speech decode while the desktop is analysed
     face = pool.submit(face_track, cfg["sources"]["face_camera"], meta["face_camera"]["duration"]) if "face" in steps else None
     speech = pool.submit(speech_map, cfg["sources"]["face_camera"], 0) if "speech" in steps else None
-    if "desktop" in steps:
-        fr = sample_desktop(desk, ddur, 2.0)
-        area = slide_area(fr) if cfg["layout"]["slide_area"] == "auto" else cfg["layout"]["slide_area"]
-        ch = slide_changes(fr, 2.0, area)
-        cb = counter_box(desk, ddur, ch, area) if cfg["layout"]["counter"] == "auto" else cfg["layout"]["counter"]
-        masks = content_masks(fr, 2.0, ch, ddur)
-        np.savez_compressed(os.path.join(A, "content_masks.npz"), *masks)
-        res.update(slide_area=area, slide_changes=ch, counter_box=cb, ink=ink_events(desk, ddur)); del fr
-    if "speech" in steps:
-        env = speech.result()
-        np.save(os.path.join(A, "speech_env.npy"), env.astype(np.float32))
-        res["pauses"] = pauses(env, cfg["editing"]["speech_threshold_dbfs"])
-    if "face" in steps:
-        np.save(os.path.join(A, "face_track.npy"), face.result())
+    try:
+        if "desktop" in steps:
+            fr = sample_desktop(desk, ddur, 2.0)
+            area = slide_area(fr) if cfg["layout"]["slide_area"] == "auto" else cfg["layout"]["slide_area"]
+            ch = slide_changes(fr, 2.0, area)
+            cb = counter_box(desk, ddur, ch, area) if cfg["layout"]["counter"] == "auto" else cfg["layout"]["counter"]
+            masks = content_masks(fr, 2.0, ch, ddur)
+            np.savez_compressed(os.path.join(A, "content_masks.npz"), *masks)
+            res.update(slide_area=area, slide_changes=ch, counter_box=cb, ink=ink_events(desk, ddur)); del fr
+        if "speech" in steps:
+            env = speech.result()
+            np.save(os.path.join(A, "speech_env.npy"), env.astype(np.float32))
+            res["pauses"] = pauses(env, cfg["editing"]["speech_threshold_dbfs"])
+        if "face" in steps:
+            np.save(os.path.join(A, "face_track.npy"), face.result())
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)   # a failed step does not leave queued decodes behind
     old = {}
     p = os.path.join(A, "analysis.json")
     if os.path.exists(p): old = json.load(open(p, encoding="utf-8"))
