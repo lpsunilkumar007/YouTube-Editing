@@ -149,6 +149,7 @@ The presenter's **red pen ink is never recoloured**, and neither are the slide o
 
 - **Hard cuts.** Cuts between face and slide happen at natural sentence boundaries.
 - **Hide slide changes:** cut to layout A just before a slide change happens, unless the change is spoken ("next screen").
+- **Never show a blank desktop:** `analyze` finds spans where the slide area is all black (PowerPoint's "End of slide show", a black slide); `timeline` switches the slide shot around each one to layout A, from the pause before it to the pause after it (`timeline.cover_blanks`), and full-video QA reports any blank still shown (`qa.blank_shown`).
 - **No** silent chapter cards, wipes or whooshes. A chapter change is marked by:
   - the spoken transition
   - a topic label (on A) or a gutter card (on B)

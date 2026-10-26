@@ -50,6 +50,28 @@ def cutaways(segments, removals, ink, pauses, fps=30, min_s=1.5, max_s=4.0):
         out.append(s)
     return [s for s in out if s["face_out"] - s["face_in"] > 0.01], done
 
+def cover_blanks(shots, blanks, pauses, fps=30, look_s=6.0, min_piece=1.0):
+    """A slide shot must never show a blank desktop ('End of slide show', a black slide). Around each blank span (face
+    time) the shot goes to the presenter (A): from the last pause before it to the first pause after it, within look_s,
+    else 0.3 s outside the blank. Slide pieces shorter than min_piece join the presenter part."""
+    for b0, b1 in blanks:
+        out = []
+        for s in shots:
+            if s["layout"] == "A" or s["face_out"] <= b0 or s["face_in"] >= b1: out.append(s); continue
+            mids = [(p0 + p1) / 2 for p0, p1 in pauses]
+            c0 = max([m for m in mids if max(s["face_in"], b0 - look_s) <= m <= b0] or [max(s["face_in"], b0 - 0.3)])
+            c1 = min([m for m in mids if b1 <= m <= min(s["face_out"], b1 + look_s)] or [min(s["face_out"], b1 + 0.3)])
+            c0, c1 = snap(c0, fps), snap(c1, fps)
+            if c0 - s["face_in"] < min_piece: c0 = s["face_in"]
+            if s["face_out"] - c1 < min_piece: c1 = s["face_out"]
+            out += [dict(s, face_out=c0), dict(s, layout="A", face_in=c0, face_out=c1), dict(s, face_in=c1)]
+        shots = [s for s in out if s["face_out"] - s["face_in"] > 0.01]
+    merged = []
+    for s in shots:
+        if merged and merged[-1]["layout"] == s["layout"] == "A" and abs(merged[-1]["face_out"] - s["face_in"]) < 1e-6: merged[-1] = dict(merged[-1], face_out=s["face_out"])
+        else: merged.append(s)
+    return merged
+
 def restarts(lines, n=2):
     flags = []
     for a, b in zip(lines, lines[1:]):
@@ -101,6 +123,7 @@ def propose(cfg, analysis, lines, offset, out_json, removals=()):
     for s in shots:
         s["face_in"], s["face_out"] = snap(s["face_in"], fps), snap(s["face_out"], fps)
     shots, _ = cutaways(shots, removals, ink, pauses, fps)
+    shots = cover_blanks(shots, [(a - offset, b - offset) for a, b in analysis.get("blank_spans", [])], pauses, fps)
     area = analysis["slide_area"]
     plan = {"status": "PROPOSAL - review, edit and approve (python -m ytpipe approve timeline)", "offset_s": offset,
             "keeps": kl, "segments": shots, "zoom_candidates": zoom_candidates(shots, ink, [area[0], area[1], area[2] - area[0], area[3] - area[1]]),
