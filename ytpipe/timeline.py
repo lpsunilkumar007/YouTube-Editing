@@ -50,6 +50,21 @@ def cutaways(segments, removals, ink, pauses, fps=30, min_s=1.5, max_s=4.0):
         out.append(s)
     return [s for s in out if s["face_out"] - s["face_in"] > 0.01], done
 
+def widen_blanks(blanks, slide_changes, near=2.0, fps=2.0):
+    """Clicking past the last slide often flashes other slides around the blank ('End of slide show'). Extend each blank
+    span (desktop time) over slide changes within `near` s of it: back to just before the first change (changes are
+    detected on the first frame of the new state, sampled at `fps`), forward to the last change."""
+    out = []
+    for b0, b1 in blanks:
+        while True:
+            pre = [c for c in slide_changes if b0 - near <= c <= b0 and c - 1 / fps < b0]
+            post = [c for c in slide_changes if b1 < c <= b1 + near]
+            n0, n1 = min([c - 1 / fps for c in pre] + [b0]), max(post + [b1])
+            if (n0, n1) == (b0, b1): break
+            b0, b1 = n0, n1
+        out.append([round(b0, 2), round(b1, 2)])
+    return out
+
 def cover_blanks(shots, blanks, pauses, fps=30, look_s=6.0, min_piece=1.0):
     """A slide shot must never show a blank desktop ('End of slide show', a black slide). Around each blank span (face
     time) the shot goes to the presenter (A): from the last pause before it to the first pause after it, within look_s,
@@ -123,7 +138,8 @@ def propose(cfg, analysis, lines, offset, out_json, removals=()):
     for s in shots:
         s["face_in"], s["face_out"] = snap(s["face_in"], fps), snap(s["face_out"], fps)
     shots, _ = cutaways(shots, removals, ink, pauses, fps)
-    shots = cover_blanks(shots, [(a - offset, b - offset) for a, b in analysis.get("blank_spans", [])], pauses, fps)
+    blanks = widen_blanks(analysis.get("blank_spans", []), analysis["slide_changes"])
+    shots = cover_blanks(shots, [(a - offset, b - offset) for a, b in blanks], pauses, fps)
     area = analysis["slide_area"]
     plan = {"status": "PROPOSAL - review, edit and approve (python -m ytpipe approve timeline)", "offset_s": offset,
             "keeps": kl, "segments": shots, "zoom_candidates": zoom_candidates(shots, ink, [area[0], area[1], area[2] - area[0], area[3] - area[1]]),

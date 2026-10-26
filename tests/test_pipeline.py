@@ -86,3 +86,9 @@ def test_blank_desktop_goes_to_presenter():
     assert [(s["layout"], s["face_in"], s["face_out"]) for s in out] == [("B", 0.0, 7.0), ("A", 7.0, 12.8), ("B", 12.8, 30.0)]
     edl = [dict(s, edit_start=s["face_in"]) for s in shots]
     assert qa.blank_shown(edl, sp, 2.0) and not qa.blank_shown([dict(s, edit_start=s["face_in"]) for s in out], sp, 2.0)
+
+def test_slides_flashed_around_a_blank_are_covered_too():
+    """Clicking past the end: other slide (362.5), black (363.5-365.0), other slide (365.0), back (366.0) -> one span."""
+    from ytpipe import timeline
+    assert timeline.widen_blanks([[363.5, 365.0]], [100.0, 362.5, 363.5, 366.0, 380.0]) == [[362.0, 366.0]]
+    assert timeline.widen_blanks([[50.0, 52.0]], [10.0, 60.0]) == [[50.0, 52.0]]
