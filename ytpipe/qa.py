@@ -167,16 +167,18 @@ def run_full(cfg, final, edl, offset, analysis, g, wd):
     stem = os.path.join(wd, "narration_stem.wav")
     sync = sync_checks(cfg, final, edl, cfg["sources"]["desktop_recording"], offset, analysis, g)
     r = full_video(cfg, final, edl, stem if os.path.exists(stem) else None, cuts, sync, os.path.join(wd, "music_stem.wav"))
-    r["findings"] += blank_shown(edl, analysis.get("blank_spans", []), offset)
+    from .timeline import widen_blanks
+    r["findings"] += blank_shown(edl, widen_blanks(analysis.get("blank_spans", []), analysis.get("slide_changes", [])), offset)
     return r
 
 def blank_shown(edl, blanks, offset):
-    """Slide shots that show a blank desktop ('End of slide show', a black slide): final-video times."""
+    """Slide shots that show a blank desktop ('End of slide show', a black slide) or the slides flashed around it
+    (spans from timeline.widen_blanks): final-video times."""
     f = []
     for b0, b1 in blanks:
         for x in edl:
             a, b = max(x["face_in"], b0 - offset), min(x["face_out"], b1 - offset)
             if x["layout"] != "A" and b > a:
                 t = x["edit_start"] + a - x["face_in"]
-                f.append(f"blank desktop (e.g. 'End of slide show') shown at {int(t // 60)}:{t % 60:04.1f} for {b - a:.1f} s")
+                f.append(f"blank desktop ('End of slide show' or slides flashed around it) shown at {int(t // 60)}:{t % 60:04.1f} for {b - a:.1f} s")
     return f
