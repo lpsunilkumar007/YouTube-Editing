@@ -49,3 +49,11 @@ def test_cut_through_writing_gets_a_cutaway():
     assert done == [13.0] and [s["layout"] for s in out] == ["B", "A", "B"] and abs(out[1]["face_out"] - 15.25) < 1 / 30
     out2, done2 = timeline.cutaways(segs, [(10.0, 13.0, {})], [{"start": 20.0, "end": 21.0}], [(15.0, 15.5)])
     assert done2 == [] and len(out2) == 2                                         # no writing inside the cut: no cut-away
+
+def test_pause_instruction_removes_only_the_break():
+    a = asr((0.0, "modulus ka use karke problems resolve karenge"), (2.65, "now pause here editor will let you know when resume the video"),
+            (8.0, "you can continue then when I will be asking you to start"), (20.0, "okay start now"), (23.0, "aage badhte hue ek aur program"))
+    c = retakes.detect(a)
+    assert len(c) == 1 and c[0]["confidence"] == "high" and c[0]["apply"]
+    assert 2.0 < c[0]["face_in"] < 2.65 and 22.5 < c[0]["face_out"] < 23.0         # same utterance (gap 0.3 s): the sentence before stays
+    assert c[0]["after"].startswith("aage badhte hue")

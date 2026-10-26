@@ -59,6 +59,42 @@ def credits_block(cfg, ids):
 
 URL = re.compile(r"https?://\S+")
 
+def seo(cfg, inp, desc, ch, tags, today=None):
+    """Title/description rules from the research (youtube.seo): satisfaction over clicks (no clickbait, promise only what
+    the video delivers), the searched phrase early in the title and the description's first lines, a title that is not
+    cut off on phones, enough description context, tag variants, YouTube's chapter rules, no lesson numbers, and a dated
+    research note with sources for every video (inp["research"]: {date, sources, search_phrases})."""
+    import datetime
+    S = cfg["youtube"]["seo"]; p = []; r = inp.get("research") or {}
+    rec = inp["titles"][inp["recommended"] - 1]["title"]; norm = lambda s: re.sub(r"[^a-z0-9%]+", " ", s.lower()).strip()
+    phrases = [norm(x) for x in r.get("search_phrases", [])]
+    if not r: p.append("no 'research' in description_input.json: research titles/search phrases for this video first (date, sources, search_phrases)")
+    else:
+        if len(r.get("sources", [])) < S["min_sources"]: p.append(f"research: cite at least {S['min_sources']} sources")
+        if not phrases: p.append("research: list the search_phrases viewers use")
+        try:
+            age = ((today or datetime.date.today()) - datetime.date.fromisoformat(r.get("date", ""))).days
+            if age > S["research_max_age_days"]: p.append(f"research is {age} days old: refresh it")
+        except ValueError: p.append("research: date must be YYYY-MM-DD")
+    if len(rec) > S["title_mobile_chars"]: p.append(f"recommended title is {len(rec)} chars: over {S['title_mobile_chars']} it is cut off on phones")
+    if phrases and not any(norm(rec).find(ph) != -1 and norm(rec).find(ph) <= S["phrase_within_chars"] for ph in phrases):
+        p.append("recommended title does not start with a researched search phrase")
+    if phrases and not any(ph in norm(inp["intro"][:200]) for ph in phrases): p.append("description intro does not use a researched search phrase")
+    for x in [t["title"] for t in inp["titles"]] + [desc, inp["pinned_comment"]]:
+        if re.search(r"\blesson\s*0*\d+\b", x, re.I): p.append(f"lesson number in viewer-facing text: {x[:60]}")
+        bait = [w for w in S["clickbait"] if w in x.lower()]
+        if bait: p.append(f"clickbait wording {bait}: {x[:60]}")
+    for t in inp["titles"]:
+        caps = [w for w in re.findall(r"[A-Za-z]{5,}", t["title"]) if w.isupper()]
+        if caps: p.append(f"all-caps words read as clickbait: {caps} in {t['title']}")
+    words = len(re.findall(r"\w+", desc.split("**Music**")[0]))
+    if words < S["description_min_words"]: p.append(f"description has {words} words (aim for {S['description_min_words']}+ for context)")
+    lo, hi = S["tags_range"]
+    if not lo <= len(tags) <= hi: p.append(f"{len(tags)} tags (aim for {lo}-{hi}, incl. spelling variants)")
+    if len(ch) < 3 or ch[0][0] != 0 or any(b[0] - a[0] < 10 for a, b in zip(ch, ch[1:])):
+        p.append("chapters must start at 0:00, be at least 3 and each at least 10 s (YouTube Help)")
+    return p
+
 def build(cfg, ch, inp):
     """inp = description_input.json content. Writes youtube_description.md, youtube_chapters.txt, youtube_tags.txt,
     youtube_hashtags.txt, pinned_comment.md, youtube_titles.md into metadata/. Returns (paths, problems)."""
@@ -85,18 +121,22 @@ def build(cfg, ch, inp):
     files["youtube_titles.md"] = ("# YouTube title options\n\n| # | Angle | Title | Characters |\n|---|---|---|---|\n" +
         "".join(f"| {i} | {x['angle']} | {x['title'].replace('|', chr(92) + '|')} | {len(x['title'])} |\n" for i, x in enumerate(t, 1)) +
         f"\n**Recommended:** {t[inp['recommended'] - 1]['title']}\n\n{inp['recommendation_reason']}\n\n"
+        + ("**Research** (" + inp["research"].get("date", "") + "): search phrases " + ", ".join(inp["research"].get("search_phrases", [])) +
+           "\n\nSources:\n" + "\n".join(f"- {u}" for u in inp["research"].get("sources", [])) + "\n\n" if inp.get("research") else "") +
         "No search-volume or ranking claims are made: no keyword data was available.\n")
     # ---- validation
     allowed = {v for v in links.values()} | {c["license_url"] for c in cred} | set(inp.get("allowed_urls", []))
     for name, txt in files.items():
+        ok = allowed | (set((inp.get("research") or {}).get("sources", [])) if name == "youtube_titles.md" else set())  # research notes
         for u in URL.findall(txt):
-            if u.rstrip(").,") not in allowed: probs.append(f"{name}: URL not from config/credits: {u}")
+            if u.rstrip(").,") not in ok: probs.append(f"{name}: URL not from config/credits: {u}")
         for ph in set(re.findall(r"\{\{[A-Z_]+\}\}", txt)): probs.append(f"{name}: placeholder to fill: {ph}")
     for x in t:
         if len(x["title"]) > maxc: probs.append(f"title over {maxc} chars: {x['title']}")
     if len(t) != cfg["youtube"]["title_options"]: probs.append(f"expected {cfg['youtube']['title_options']} titles")
     if cred_text and cred_text not in desc: probs.append("credit text not verbatim in description")
     if len(desc) > 5000: probs.append(f"description {len(desc)} chars > YouTube limit 5000")
+    probs += seo(cfg, inp, desc, ch, tags)
     for name, txt in files.items():
         with open(os.path.join(M, name), "w", encoding="utf-8") as f: f.write(txt)
     return [os.path.join(M, n) for n in files], probs

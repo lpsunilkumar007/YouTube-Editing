@@ -23,7 +23,11 @@ Tick an item only if its check actually ran (see `reports\qa_*.json` and `publis
 - [ ] One option chosen (`approve thumbnail`). QA: size, safe margins, mobile text size, no text on the face, topic words present.
 - [ ] Real face from your own recording.
 
+## Fact check
+- [ ] `reports/fact_check.md` says PASS: every claim verified; wrong claims cut or corrected; imprecise ones not repeated in written copy.
+
 ## Description and metadata
+- [ ] Title research recorded (`description_input.json` `research`, dated, sourced); `metadata` reports no problems.
 - [ ] Title chosen from `youtube_titles.md`.
 - [ ] All placeholders filled: channel name, playlist link, next-lesson link.
 - [ ] Chapters copied from `youtube_chapters.txt`, the first at 0:00.

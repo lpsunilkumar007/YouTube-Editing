@@ -1,7 +1,9 @@
 """Stage 'retakes': find the parts the presenter asked to cut while recording, and repeated starts (retakes), and
 propose face-time content cuts for the timeline (timelines/content_cuts.json + reports/content_cuts.md).
 
-Spoken instructions ("isko cut kar dena", "cut this part", "कट कर देना") are STRONG: always proposed. Words that are
+A pause instruction ("now pause here, editor, I'll tell you when to resume" ... "okay, start now") removes only the break:
+from the instruction to the first utterance after it and its start/okay cues. Spoken cut instructions ("isko cut kar
+dena", "cut this part", "कट कर देना") are STRONG: always proposed. Words that are
 also normal teaching language ("phir se", "dobara", "again" - loops repeat steps!) are WEAK: they only count when the
 presenter then repeats an earlier sentence opening. For each instruction the cut runs from where the abandoned attempt
 started to where the clean restart starts:
@@ -16,6 +18,8 @@ import json, os, re
 STRONG = [r"\bcut\b", r"\bkat (do|dena|dijiye)\b", r"\bedit (kar|karna|kardo|kar do|out)\b", r"\bremove (this|that|it)\b",
           r"\b(isko|ise|isse|ye|yeh|is part ko|ye part|that part|this part) (hata|nikal|remove)", r"\bretake\b",
           "कट", "काट दे", "हटा दे", "एडिट कर"]
+PAUSE = [r"\bpause\b", r"\beditor\b", r"\bresume\b", r"\bstop (the )?recording\b", "पॉज", "पोस है", "एडिटर", "रिसूम"]
+RESUME = [r"\bstart\b", r"\bcontinue\b", r"\bresume\b", r"^\W*(okay|ok|so)\W*$", "स्टार्ट", "ओके"]
 WEAK = [r"\bphir se\b", r"\bdobara\b", r"\bdubara\b", r"\bonce again\b", r"\bagain\b", r"\bfrom (the )?(start|beginning)\b",
         "फिर से", "दोबारा", "दुबारा"]
 
@@ -50,9 +54,29 @@ def _match(W, us, k, start, n=3):
             if [w[2] for w in W[u[0]:u[0] + m]] == key: return u
     return None
 
-def detect(asr, strong=STRONG, weak=WEAK):
-    W = words_of(asr); us = utterances(W); cuts = []
+def detect(asr, strong=STRONG, weak=WEAK, pause=PAUSE, resume=RESUME, pauses=None):
+    """pauses: the measured speech-map pauses (analysis.json). ASR word times can run words together; a measured pause
+    just before an instruction is the exact place to start its cut."""
+    W = words_of(asr); us = utterances(W); cuts = []; skip = set()
+    for ui, (i, j) in enumerate(us):                 # "pause here, editor... start now": only the break goes, not the sentence before
+        text = _text(W, i, j + 1)
+        if ui in skip or not any(re.search(p, text) for p in pause): continue
+        k = ui + 1
+        while k < len(us) and W[us[k][0]][0] - W[j][1] < 120 and any(re.search(p, _text(W, us[k][0], us[k][1] + 1)) for p in pause + resume):
+            skip.add(k); k += 1
+        if k >= len(us): continue
+        m = m0 = next(m for m in range(i, j + 1) if any(re.search(p, _text(W, m, m + 3)) for p in pause))   # first instruction word
+        m = max(range(max(i, m - 2), m + 1), key=lambda x: W[x][0] - W[x - 1][1] if x > 0 else 9)  # the instruction opens at the
+                                                                                     # biggest gap just before it ("now | pause here")
+        i = m; text = _text(W, i, j + 1)
+        a, b = _bounds(W, i, us[k][0]); skip.add(ui)
+        pm = [p for p in pauses or [] if p[0] < W[m0][0] and p[1] > W[m0][0] - 3.0 and p[1] - p[0] >= 0.25]
+        if pm: p0, p1 = max(pm, key=lambda p: p[1]); a = round(p0 + min(0.25, (p1 - p0) / 2), 3)
+        i = next(x for x in range(len(W)) if W[x][0] >= a - 0.05 or x == us[k][0]); text = _text(W, i, j + 1)   # words really cut
+        cuts.append({"face_in": a, "face_out": b, "reason": f"spoken pause instruction (break in the recording): \"{text}\"", "confidence": "high", "apply": True,
+                     "before": _text(W, i - 10, i), "removed": _text(W, i, us[k][0]), "after": _text(W, us[k][0], us[k][0] + 10)})
     for ui, (i, j) in enumerate(us):
+        if ui in skip: continue
         text = _text(W, i, j + 1); kind = "strong" if any(re.search(p, text) for p in strong) else "weak" if any(re.search(p, text) for p in weak) else None
         if not kind or ui + 1 >= len(us): continue
         k = ui + 1; att = _match(W, us, k, i)
@@ -88,7 +112,8 @@ def report(cuts, path):
     return path
 
 def run(cfg, asr):
-    cuts = detect(asr); P = cfg["paths"]; os.makedirs(P["timelines"], exist_ok=True); os.makedirs(P["reports"], exist_ok=True)
+    P = cfg["paths"]; an = os.path.join(P["analysis"], "analysis.json")
+    cuts = detect(asr, pauses=json.load(open(an, encoding="utf-8")).get("pauses") if os.path.exists(an) else None); os.makedirs(P["timelines"], exist_ok=True); os.makedirs(P["reports"], exist_ok=True)
     out = os.path.join(P["timelines"], "content_cuts.json")
     if os.path.exists(out):                                          # keep reviewed apply decisions for cuts that still exist
         old = {(round(c["face_in"], 1), round(c["face_out"], 1)): c["apply"] for c in json.load(open(out, encoding="utf-8"))}

@@ -36,6 +36,12 @@ def _blog(d):
     return top + [os.path.join(d, u) for u in used if os.path.exists(os.path.join(d, u))] + \
            [os.path.join(d, "wordpress", f) for f in ("dry_run.md", "outreach.md") if os.path.exists(os.path.join(d, "wordpress", f))]
 
+def _fact_status(P):
+    f = os.path.join(P["reports"], "fact_check.md")
+    if not os.path.exists(f): return "- **not done**: run `python -m ytpipe factcheck` (claims must be verified before publishing)"
+    m = re.search(r"Result: \*\*(.+?)\*\*", open(f, encoding="utf-8").read())
+    return f"- {m.group(1) if m else 'unknown'} (reports/fact_check.md)"
+
 def build(cfg, final_video=None):
     P = cfg["paths"]; out = os.path.join(P["root"], "publishing_package"); os.makedirs(out, exist_ok=True); st = state.load(cfg)
     items = {"full video": [final_video] if final_video else [], "captions": glob.glob(os.path.join(P["transcripts"], "*.srt")),
@@ -50,6 +56,7 @@ def build(cfg, final_video=None):
     qa = {os.path.basename(f)[3:-5]: json.load(open(f, encoding="utf-8")) for f in glob.glob(os.path.join(P["reports"], "qa_*.json"))}
     lines = [f"# Publishing package: {cfg['project']['lecture_topic']}", "", f"Built {time.strftime('%Y-%m-%d %H:%M')}. Files are copies.", "",
              "## Approvals", ""] + [f"- {g}: {'**approved** ' + st['approvals'][g]['at'] if g in st['approvals'] else 'not approved'}" for g in state.GATES] + \
+            ["", "## Fact check", "", _fact_status(P)] + \
             ["", "## QA checks that ran", ""] + ([f"- {k}: {_count(v)} finding(s)" for k, v in qa.items()] or ["- none recorded"]) + \
             ["", "## Contents", ""]
     for k, fs in items.items():

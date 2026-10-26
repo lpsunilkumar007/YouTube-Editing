@@ -14,6 +14,9 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   preview     render selected segments (--segments 0,3,7) after 'timeline' approval
   render      full video after 'full_render' approval -> full_video/<lesson>.mp4 (+ QA)
   captions    transcripts/<lesson>_hinglish.srt from transcripts/transcript.txt (+ review list)
+  factcheck   claims in the cleaned transcript -> reports/fact_check_brief.md; Claude verifies each against sources into
+              metadata/fact_check.json; passes only when every claim has a verdict and every error a fix (cut or note).
+              metadata, blog and wp-publish refuse to run until it passes (factcheck.required)
   metadata    chapters/description/tags/hashtags/pinned comment from metadata/description_input.json
   blog        Medium-style SEO article from metadata/blog_input.json -> blog/<slug>.md, .html, SEO.txt (+ cover)
   wp-publish  WordPress DRAFT of the blog post: dry run by default (blog/wordpress/dry_run.md: everything that would be
@@ -34,6 +37,20 @@ from . import config, state, sources, sync, analyze, transcript, timeline, capti
 
 def _j(p):
     return json.load(open(p, encoding="utf-8"))
+
+def _factcheck(cfg, P, edl_segments=None):
+    """(claims, problems) of the fact check for this lesson (see ytpipe/factcheck.py)."""
+    from . import factcheck, transcript as tr_
+    tp = os.path.join(P["transcripts"], "transcript.txt")
+    if not os.path.exists(tp): return [], ["no transcripts/transcript.txt: clean the transcript first"]
+    gl = [k for k in _j(os.path.join(config.ROOT, cfg["captions"]["glossary"])) if not k.startswith("_")]
+    ft = (lambda F: next((round(s["edit_start"] + F - s["face_in"], 2) for s in edl_segments if s["face_in"] <= F <= s["face_out"]), None)) if edl_segments else None
+    return factcheck.run(cfg, tr_.parse(tp), gl, ft, cfg["project"]["lecture_topic"])
+
+def _require_factcheck(cfg, P, stage):
+    if not cfg["factcheck"]["required"]: return
+    E = os.path.join(P["timelines"], "edl.json"); _, probs = _factcheck(cfg, P, _j(E)["segments"] if os.path.exists(E) else None)
+    if probs: sys.exit(f"{stage}: the fact check has not passed (python -m ytpipe factcheck):\n  - " + "\n  - ".join(probs[:12]))
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="ytpipe", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -97,13 +114,19 @@ def main(argv=None):
         env = np.load(os.path.join(A, "speech_env.npy")) if os.path.exists(os.path.join(A, "speech_env.npy")) else None
         srt, cues, rev = captions.build(cfg, transcript.parse(os.path.join(P["transcripts"], "transcript.txt")), edl()["segments"], env)
         print(srt, len(cues), "cues;", len(rev), "lines to review; QA:", qa.captions(srt, edl()["duration"], cfg) or "pass")
+    elif s == "factcheck":
+        E = os.path.join(P["timelines"], "edl.json"); cl, probs = _factcheck(cfg, P, _j(E)["segments"] if os.path.exists(E) else None)
+        print(len(cl), "claims ->", os.path.join(P["reports"], "fact_check_brief.md")); print("fact check:", "PASS" if not probs else f"{len(probs)} open")
+        for x in probs[:15]: print("  -", x)
     elif s == "metadata":
+        _require_factcheck(cfg, P, "metadata")
         E = edl(); ch = metadata.chapters(_j(os.path.join(P["timelines"], "chapter_markers.json"))["markers"], E["segments"], E["duration"])
         metadata.content_brief(transcript.parse(os.path.join(P["transcripts"], "transcript.txt")), E["segments"], ch, os.path.join(P["metadata"], "content_brief.md"))
         inp = os.path.join(P["metadata"], "description_input.json")
         if not os.path.exists(inp): sys.exit(f"content brief written; now write {inp} (titles, description parts, tags) and rerun")
         paths, probs = metadata.build(cfg, ch, _j(inp)); print("\n".join(paths)); print("problems:", probs or "none")
     elif s == "blog":
+        _require_factcheck(cfg, P, "blog")
         from . import blog
         inp = os.path.join(P["metadata"], "blog_input.json")
         if not os.path.exists(inp): sys.exit(f"write {inp} from metadata/content_brief.md first (fields: see ytpipe/blog.py)")
@@ -116,6 +139,7 @@ def main(argv=None):
         for m in r["todo"]: print("to do:", m)
     elif s in ("wp-publish", "wp-check"):
         from . import blog, wordpress
+        if s == "wp-publish": _require_factcheck(cfg, P, "wp-publish")
         W = cfg["wordpress"]; client = None
         if s == "wp-check": print(json.dumps(wordpress.check(wordpress.connect(cfg)), indent=1, ensure_ascii=False)); return
         inp = _j(os.path.join(P["metadata"], "blog_input.json")); th = publish._thumbnails(cfg, state.load(cfg))

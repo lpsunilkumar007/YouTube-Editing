@@ -37,6 +37,9 @@ def joints(stem_wav, cut_times, sr=48000, max_gap=0.5):
 def frame_timing(video, edl, desktop, offset, ink_events_desktop, g, tol_frames=1, max_checks=40, fps=30):
     """At pen-moving moments, which raw desktop frame does the rendered slide card show? Compares the card (mapped back to
     slide px) with raw frames planned-6..+6 on pixels whose ink state changes. Flags |lag| > tol_frames.
+    Known limit: strokes drawn over earlier ink (circling, overwriting) give ambiguous matches and can show false lags
+    in both directions; a real offset shows as the SAME lag on most strokes. Render timing itself is guaranteed by
+    render.segment (exact frame count, frame k at k/fps) and tested in tests/test_render.py.
     -> {"checked": moments actually compared, "lags": [...]} (checked 0 = nothing verified, not a pass)."""
     sx, sy, sw, sh = g["slide_area"]; cx, cy, cw, ch = g["card"]; out = []; n = 0
     moments = [e["start"] + 0.5 * (e["end"] - e["start"]) for e in ink_events_desktop]

@@ -87,13 +87,13 @@ def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, bad
     aud = f"[0:a]pan=mono|c0=c0,aresample=48000[a]"
     inputs = ["-ss", f"{a:.4f}", "-t", f"{T}", "-i", face]; rgb = "scale=out_color_matrix=bt709:out_range=tv"
     if seg["layout"] == "A":
-        fc = f"[0:v]fps={fps},{face_filter(cfg, pipeline, W, H, crop, 'yuv444p')},setsar=1[s0];"; prev = "s0"; n = 1
+        fc = f"[0:v]setpts=PTS-STARTPTS,fps={fps},{face_filter(cfg, pipeline, W, H, crop, 'yuv444p')},setsar=1[s0];"; prev = "s0"; n = 1
     else:
         d = g["camera"][2]; cx, cy, cw, ch = g["card"]
         (rg, rx, ry), (sh, hx, hy), (rc, qx, qy) = (tight(layers[k]) for k in ("card_ring", "cam_shadow", "cam_ring"))
         inputs += ["-ss", f"{a + offset:.4f}", "-t", f"{T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
                    *loop(layers["cam_mask"]), *loop(rg), *loop(sh), *loop(rc)]
-        fc = (f"[0:v]fps={fps},{face_filter(cfg, pipeline, d, d, crop, 'yuv444p')},setsar=1,format=yuva444p[c0];"
+        fc = (f"[0:v]setpts=PTS-STARTPTS,fps={fps},{face_filter(cfg, pipeline, d, d, crop, 'yuv444p')},setsar=1,format=yuva444p[c0];"
               f"[4:v]format=gray,setsar=1[cmk];[c0][cmk]alphamerge[cam];"
               f"[1:v]{desk_filter(g, T, fps, seg.get('zoom'), cfg['zoom']['ease_s'])},format=yuva444p[d0];"
               f"[3:v]format=gray,setsar=1[dmk];[d0][dmk]alphamerge[desk];"
@@ -115,11 +115,14 @@ def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, bad
         inputs += ["-i", mov]
         fc += (f"[{n}:v]format=yuva444p,setpts=PTS+{off:.4f}/TB,setsar=1[e{k}];[{prev}][e{k}]overlay=0:0:format=yuv444:"
                f"eof_action=pass[x{k}];"); prev = f"x{k}"; n += 1
-    fc += f"[{prev}]format=yuv420p[v];{aud}"
+    N = round(T * fps)                                # exactly the planned frames: the face path can end one frame early, and a
+    fc += f"[{prev}]setpts=N/({fps}*TB),tpad=stop_mode=clone:stop_duration={3 / fps:.4f},format=yuv420p[v];{aud}"   # frame k at k/fps;
+                                                      # a segment that starts late or short leaves a timestamp
+                                                      # gap after joining: the picture then drifts behind the sound
     hw = ["-init_hw_device", "vulkan"] if pipeline == "libplacebo" else []
     cmd = ["ffmpeg", "-v", "error", "-y", *hw, *inputs, "-filter_complex", fc, "-map", "[v]", "-map", "[a]", *cfg["output"]["x264"],
            "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv",
-           "-c:a", "pcm_s24le", "-t", f"{T}", out]
+           "-c:a", "pcm_s24le", "-t", f"{T}", "-frames:v", str(N), out]
     return cmd
 
 def render_segment(cmd, out, retries=3):
