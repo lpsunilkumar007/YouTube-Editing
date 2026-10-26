@@ -304,11 +304,40 @@ def page_stairs(o, person):
             + arrow + "".join(out) + star + f'{tag}' + _big(o["headline"], o.get("mark", ()), 64, 56, o.get("size", 100)))
     return body, face, "--lx:80%;--ly:40%;--gx:10%;--gy:96%"
 
-V3 = ("versus", "journey", "paper", "stairs")          # v3: large face by design (head box up to 400 px)
+def page_decision(o, person):
+    """If-else: a decision diamond (`cond`) with its two paths, NO -> `no` (red) and YES -> `yes` (lime). Face right by default;
+    side "left" puts the face left and the headline and diamond right of the cut-out (clear of the shoulders)."""
+    src, ff = person; im = Image.open(src); h = o.get("person_h", 640); w = h * im.width / im.height
+    if o.get("side") == "left":
+        tag, face, pb = _person(src, ff, -60 + o.get("person_dx", 0), 720, h)
+        L = max(500, int(pb[2]) - 10); lx, vars_ = 0, "--lx:22%;--ly:45%;--gx:96%;--gy:8%"
+    else:
+        tag, face, pb = _person(src, ff, 1280 - w + 60 + o.get("person_dx", 0), 720, h)
+        L = 64; lx, vars_ = pb[0] + 40, "--lx:80%;--ly:40%;--gx:10%;--gy:96%"
+    cx, cy, hw, hh, pw = L + 310, 410, 215, 110, 180
+    xn, xy = cx - hw, cx + hw                                   # the diamond's left (NO) and right (YES) corners; a pill under each
+    a = 'stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"'
+    arrow = lambda x, c: f'<path d="M{x} {cy} V{cy + 126} M{x - 12} {cy + 114} L{x} {cy + 128} L{x + 12} {cy + 114}" stroke="{c}" {a}/>'
+    svg = (f'<svg class="abs" style="left:0;top:0" width="1280" height="720">'
+           f'<path d="M{cx} {cy - hh} L{xy} {cy} L{cx} {cy + hh} L{xn} {cy} Z" fill="#0F172A" stroke="#38BDF8" stroke-width="8" stroke-linejoin="round"/>'
+           + arrow(xn, "#EF4444") + arrow(xy, "#A3E635") + '</svg>')
+    lab = lambda x, t, c: f'<div class="abs" style="left:{x}px;top:{cy + 40}px;font:900 34px Poppins;color:{c}">{t}</div>'
+    pill = lambda x, t, bg, fg: (f'<div class="abs" data-qa="text" style="left:{x - pw / 2:.0f}px;top:{cy + 136}px;width:{pw}px;height:78px;border-radius:39px;'
+                                 f'background:{bg};color:{fg};font:900 54px/78px Poppins;text-align:center;box-shadow:0 14px 30px rgba(0,0,0,.5)">{_h.escape(t)}</div>')
+    body = (f'<style>{V3_CSS}</style><div class="backlight" style="left:{lx:.0f}px;top:90px;width:540px;height:540px;background:rgba(56,189,248,.20)"></div>'
+            + svg + f'<div class="abs" style="left:{cx - hw}px;top:{cy - 26}px;width:{2 * hw}px;text-align:center;font:800 40px \'JetBrains Mono\';letter-spacing:-.04em;color:#F8FAFC;'
+            f'white-space:nowrap">{_h.escape(o.get("cond", "N % 2 = 0 ?"))}</div>'
+            + lab(xn - 64, "NO", "#FCA5A5") + lab(xy + 14, "YES", "#D9F99D")
+            + pill(xn, o.get("no", "ODD"), "#EF4444", "#FFFFFF") + pill(xy, o.get("yes", "EVEN"), "#A3E635", "#0B1220")
+            + tag + _big(o["headline"], o.get("mark", ()), L, 56, o.get("size", 100)))
+    return body, face, vars_
+
+V3 = ("versus", "journey", "paper", "stairs", "decision")          # v3: large face by design (head box up to 400 px)
 LAYOUTS = {"premium": (page_premium, "confident", "bust"), "concept": (page_concept, "explaining", "head"),
            "curious": (page_curious, "curious", "half"),
            "versus": (page_versus, "confident", "head"), "journey": (page_journey, "confident", "head"),
-           "paper": (page_paper, "explaining", "head"), "stairs": (page_stairs, "confident", "head")}
+           "paper": (page_paper, "explaining", "head"), "stairs": (page_stairs, "confident", "head"),
+           "decision": (page_decision, "confident", "head")}
 
 def render(o, person, out_png):
     body, face, vars_ = LAYOUTS[o["layout"]][0](o, person)
@@ -335,11 +364,12 @@ def fit(o, info, cfg):
     over = right - (W - m)
     hits = [b for b in t if b["x"] < hb[2] and b["x"] + b["w"] > hb[0] and b["y"] < hb[3] and b["y"] + b["h"] > hb[1]]
     if not over > 0 and not hits: return None
-    if o["layout"] in ("versus", "journey", "stairs"):          # v3, face right: slide right a little, then shrink
+    face_left = o["layout"] == "paper" or (o["layout"] == "decision" and o.get("side") == "left")
+    if o["layout"] in ("versus", "journey", "stairs", "decision") and not face_left:   # v3, face right: slide right a little, then shrink
         if o.get("person_dx", 0) < 80: o["person_dx"] = o.get("person_dx", 0) + 40
         else: o["person_h"] = int(o.get("person_h", 640) * 0.93)
         return o
-    if o["layout"] == "paper":                        # v3, face left: move subject left, then shrink, then the text
+    if face_left:                                     # v3, face left: move subject left, then shrink, then the text
         if o.get("person_dx", 0) > -100: o["person_dx"] = o.get("person_dx", 0) - 50
         elif o.get("person_h", 640) > 520: o["person_h"] = int(o.get("person_h", 640) * 0.93)
         else: o["size"] = int(o.get("size", 104) * 0.94)

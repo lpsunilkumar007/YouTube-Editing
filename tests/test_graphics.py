@@ -29,3 +29,19 @@ def test_hyperframes_kinds(tmp_path):
     movs = graphics.render_elements(cfg, els)
     for m in movs.values():
         assert render.frame_count(m) >= 30
+
+def test_thumbnail_decision_layout(tmp_path):
+    """The if-else diamond: both pills stay inside the safe margins and clear of the cut-out, for either face side."""
+    import re
+    from PIL import Image
+    from ytpipe import thumbs_v2
+    src = str(tmp_path / "cut.png"); Image.new("RGBA", (400, 500), (200, 180, 160, 255)).save(src)
+    for side in ("right", "left"):
+        o = {"layout": "decision", "side": side, "headline": ["HOW CODE", "DECIDES"], "mark": ["DECIDES"], "cond": "N % 2 = 0 ?"}
+        body, face, _ = thumbs_v2.page_decision(o, (src, [0.3, 0.1, 0.7, 0.4]))
+        pills = [float(x) for x in re.findall(r'data-qa="text" style="left:([\d.]+)px;top:[\d.]+px;width:180px', body)]
+        assert len(pills) == 2 and ">ODD<" in body and ">EVEN<" in body
+        assert all(64 <= x and x + 180 <= 1280 - 64 for x in pills)
+        person = [float(x) for x in re.search(r'class="person [^"]*"[^>]*left:(-?[\d.]+)px;top:[\d.]+px;height:(\d+)px', body).groups()]
+        right = person[0] + person[1] * 400 / 500
+        assert (min(pills) >= right - 15) if side == "left" else (max(pills) + 180 <= person[0] + 40)
