@@ -5,8 +5,10 @@ refuse to run until it passes.
 1. brief   reports/fact_check_brief.md: every claim-like line of transcripts/transcript.txt (numbers, %, =, definitions,
            "always/only/means", glossary terms) with an id and its time in the final video.
 2. verdict metadata/fact_check.json, written by Claude after checking each claim against reliable sources:
-           {"checked": "YYYY-MM-DD", "claims": [{"id", "verdict": correct|imprecise|wrong|opinion, "source", "note",
+           {"checked": "YYYY-MM-DD", "claims": [{"id", "text", "verdict": correct|imprecise|wrong|opinion, "source", "note",
             "action": none|cut|note|keep_flagged}]}
+           Verdicts match their claim by "text" (ids renumber when a transcript line is added or removed); an entry
+           without text falls back to its id.
            - wrong     needs a source and a fix: "cut" (an applied cut in timelines/content_cuts.json covers its time)
                        or "note" (a correction written into the description / pinned comment: field "correction")
            - imprecise needs a note; it is never repeated in written copy (description, blog, Shorts)
@@ -38,10 +40,16 @@ def brief(cl, path, title):
     open(path, "w", encoding="utf-8").write("\n".join(L) + "\n")
     return path
 
+def verdicts(cl, fc):
+    """claim id -> its verdict entry, matched by claim text (ids shift when transcript lines change), else by id."""
+    xs = (fc or {}).get("claims", []); by_text = {x["text"]: x for x in xs if x.get("text")}
+    by_id = {x["id"]: x for x in xs if not x.get("text")}
+    return {c["id"]: by_text.get(c["text"]) or by_id.get(c["id"]) for c in cl if by_text.get(c["text"]) or by_id.get(c["id"])}
+
 def check(cl, fc, cuts=()):
     """-> problems ([] = pass)."""
     if not fc: return ["no metadata/fact_check.json: check the claims in reports/fact_check_brief.md first"]
-    v = {c["id"]: c for c in fc.get("claims", [])}; p = []
+    v = verdicts(cl, fc); p = []
     for c in cl:
         x = v.get(c["id"])
         if not x: p.append(f"{c['id']} has no verdict: {c['text'][:70]}"); continue
@@ -58,11 +66,11 @@ def check(cl, fc, cuts=()):
     return p
 
 def report(cl, fc, problems, path, title):
-    v = {c["id"]: c for c in (fc or {}).get("claims", [])}
+    v = verdicts(cl, fc); v.update({x["id"]: x for x in (fc or {}).get("claims", []) if x["id"].startswith("r")})
     L = [f"# Fact check: {title}", "", f"Checked {fc.get('checked', '?') if fc else '(not yet)'}. Result: **{'PASS' if not problems else 'NOT PASSED'}**.", ""]
     ids = {c["id"] for c in cl}                                    # claims removed in the edit are recorded too (id "r…", text)
     flagged = [c for c in cl if v.get(c["id"], {}).get("verdict") in ("wrong", "imprecise")] + \
-              [{"id": x["id"], "text": x.get("text", "")} for x in (fc or {}).get("claims", []) if x["id"] not in ids]
+              [{"id": x["id"], "text": x.get("text", "")} for x in (fc or {}).get("claims", []) if x["id"].startswith("r")]
     L += ["## Corrections and flags", ""] + ([f"- **{c['id']} ({v[c['id']]['verdict']}, action {v[c['id']].get('action', 'none')})**: {c['text']}  \n"
           f"  {v[c['id']].get('note', '')} {('Correction: ' + v[c['id']]['correction']) if v[c['id']].get('correction') else ''} "
           f"{('Source: ' + v[c['id']]['source']) if v[c['id']].get('source') else ''}" for c in flagged] or ["- none"])

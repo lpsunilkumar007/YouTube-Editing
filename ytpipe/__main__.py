@@ -4,6 +4,7 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   init        validate config, create the lesson folders
   inspect     ffprobe facts -> analysis/metadata.json
   sync        offset/drift -> analysis/sync.json + reports/synchronization_report.md (stops with 'needs_input' if unsure)
+  ink         --from/--to desktop seconds: glyphs written there + nearby words, to build timelines/sync_anchors.json
   transcribe  faster-whisper words (once) -> transcripts/words.json + transcript_draft.txt (to be corrected)
   analyze     slide area, slide changes, counter, ink, content masks, speech map, face track
   retakes     spoken cut instructions + repeated starts -> timelines/content_cuts.json, reports/content_cuts.md
@@ -55,7 +56,7 @@ def _require_factcheck(cfg, P, stage):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="ytpipe", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("stage"); ap.add_argument("gate", nargs="?"); ap.add_argument("--config", required=True)
-    ap.add_argument("--segments"); ap.add_argument("--clips"); ap.add_argument("--at"); ap.add_argument("--len", type=float, default=5.0)
+    ap.add_argument("--from", dest="from_"); ap.add_argument("--to"); ap.add_argument("--segments"); ap.add_argument("--clips"); ap.add_argument("--at"); ap.add_argument("--len", type=float, default=5.0)
     ap.add_argument("--note", default=""); ap.add_argument("--force", action="store_true")
     ap.add_argument("--send", action="store_true"); ap.add_argument("--check-links", action="store_true")
     ap.add_argument("--final", help="package / shorts-render / qa: an existing final video (read only, never modified)")
@@ -74,6 +75,14 @@ def main(argv=None):
     elif s == "sync":
         r = sync.run(cfg, meta())["result"]; print(json.dumps(r, indent=1))
         if r["status"] != "ok": sys.exit("sync needs your input: see reports/synchronization_report.md, then set sync.manual_offset_s")
+    elif s == "ink":                                           # glyphs written between two desktop times + the words near them
+        from . import analyze as az
+        t0, t1 = float(a.from_), float(a.to)
+        for r in az.ink_runs(cfg["sources"]["desktop_recording"], t0, t1): print("ink", r)
+        wj = os.path.join(P["transcripts"], "words.json")
+        if os.path.exists(wj):
+            ws = [w for g in _j(wj)["segments"] for w in g.get("words", []) if t0 - 12 <= w[0] <= t1 + 12]
+            print("words (face clock):", " ".join(f"{w[0]:.1f}:{w[2].strip()}" for w in ws))
     elif s == "transcribe":
         ep = os.path.join(A, "speech_env.npy")              # after 'analyze': decode only the speech, in chunks
         wj = os.path.join(P["transcripts"], "words.json")
@@ -93,7 +102,8 @@ def main(argv=None):
         print(len(t["segments"]), "segments,", len(t["restart_flags"]), "restart flags,", t["removed_dead_air_s"], "s dead air removed (proposal)")
     elif s == "retakes":
         from . import retakes
-        cuts, out, rp = retakes.run(cfg, _j(os.path.join(P["transcripts"], "words.json")))
+        cuts, out, rp, missed = retakes.run(cfg, _j(os.path.join(P["transcripts"], "words.json")))
+        if missed: print(f"{len(missed)} stretch(es) of speech with no transcribed words: re-transcribe and listen (see {rp})")
         print(len(cuts), "proposed cuts,", sum(c["apply"] for c in cuts), "applied,", round(sum(c["face_out"] - c["face_in"] for c in cuts if c["apply"]), 1), "s:", rp)
     elif s == "sample":
         from . import sample
