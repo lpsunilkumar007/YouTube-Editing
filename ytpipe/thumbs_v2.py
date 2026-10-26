@@ -386,8 +386,23 @@ def fit(o, info, cfg):
         o["person_h"] = int(o.get("person_h", 470) * 0.93)
     return o
 
-def qa(cfg, info, png, topic_words, headline_words_max=5, face_max=330):
-    p = []; im = Image.open(png); m = cfg["thumbnails"]["safe_margin"]
+def covered(info, cutout_png, min_frac=0.03):
+    """Text the presenter's cut-out covers or touches (shoulders, arms), not just the face: share of each text box under
+    opaque cut-out pixels. Lesson 04's 'ODD' pill sat behind a shoulder while the face check passed."""
+    pb = next((b for b in info["boxes"] if b["qa"] == "person"), None)
+    if not pb or not cutout_png: return []
+    a = np.asarray(Image.open(cutout_png).convert("RGBA").resize((max(1, round(pb["w"])), max(1, round(pb["h"]))))) [..., 3] > 128
+    out = []
+    for b in info["boxes"]:
+        if b["qa"] not in ("text", "headline"): continue
+        x0, y0 = int(max(b["x"], pb["x"])), int(max(b["y"], pb["y"])); x1, y1 = int(min(b["x"] + b["w"], pb["x"] + pb["w"])), int(min(b["y"] + b["h"], pb["y"] + pb["h"]))
+        if x1 <= x0 or y1 <= y0: continue
+        sub = a[y0 - int(pb["y"]):y1 - int(pb["y"]), x0 - int(pb["x"]):x1 - int(pb["x"])]
+        if sub.size and sub.sum() / (b["w"] * b["h"]) >= min_frac: out.append(f"'{b['text']}' is covered by the presenter cut-out ({100 * sub.sum() / (b['w'] * b['h']):.0f} %)")
+    return out
+
+def qa(cfg, info, png, topic_words, headline_words_max=5, face_max=330, cutout=None):
+    p = covered(info, cutout); im = Image.open(png); m = cfg["thumbnails"]["safe_margin"]
     if im.size != (W, H): p.append(f"size {im.size}")
     if not {"Poppins 900"} <= set(info["fonts"]): p.append(f"headline font not loaded: {info['fonts']}")
     texts = [b for b in info["boxes"] if b["qa"] in ("text", "headline")]; fx0, fy0, fx1, fy1 = head_box(info["face_box"])
@@ -431,7 +446,7 @@ def run(cfg, rows, spec_file, out_dir, name="thumbnail_premium_v2", only=None):
             o = o2; info = render(o, person, png)
         fitted = {k2: o[k2] for k2 in ("person_h", "person_dx", "size") if k2 in o}
         res.append({"file": png, "html": png.replace(".png", ".html"), "layout": o["layout"], "frame_t": r["t"], "fitted": fitted, "expression": {x: r[x] for x in ("smile", "jaw", "blink", "yaw", "roll")},
-                    "qa": qa(cfg, info, png, spec["topic_words"], face_max=400 if o["layout"] in V3 else 330)})
+                    "qa": qa(cfg, info, png, spec["topic_words"], face_max=400 if o["layout"] in V3 else 330, cutout=person[0])})
     d = distinct([os.path.join(out_dir, f"{name}_{k}.png") for k in range(1, len(spec["options"]) + 1)
                   if os.path.exists(os.path.join(out_dir, f"{name}_{k}.png"))])
     for r in res: r["distinct"] = d

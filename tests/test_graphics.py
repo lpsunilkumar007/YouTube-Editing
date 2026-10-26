@@ -45,3 +45,14 @@ def test_thumbnail_decision_layout(tmp_path):
         person = [float(x) for x in re.search(r'class="person [^"]*"[^>]*left:(-?[\d.]+)px;top:[\d.]+px;height:(\d+)px', body).groups()]
         right = person[0] + person[1] * 400 / 500
         assert (min(pills) >= right - 15) if side == "left" else (max(pills) + 180 <= person[0] + 40)
+
+def test_thumbnail_text_behind_the_shoulder_fails_qa(tmp_path):
+    """Lesson 04 option 3: the 'ODD' pill sat behind the shoulder while the face-only check passed."""
+    from PIL import Image
+    from ytpipe import thumbs_v2
+    cut = Image.new("RGBA", (400, 500), (0, 0, 0, 0)); cut.paste((200, 180, 160, 255), (0, 250, 400, 500))   # body in the lower half
+    p = str(tmp_path / "cut.png"); cut.save(p)
+    info = {"boxes": [{"qa": "person", "x": 0, "y": 220, "w": 400, "h": 500},
+                      {"qa": "text", "text": "ODD", "x": 300, "y": 560, "w": 200, "h": 78},
+                      {"qa": "text", "text": "EVEN", "x": 700, "y": 560, "w": 180, "h": 78}]}
+    assert [x.split("'")[1] for x in thumbs_v2.covered(info, p)] == ["ODD"]

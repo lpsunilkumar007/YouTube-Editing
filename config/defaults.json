@@ -24,11 +24,13 @@
     "drift_check_points": 3,
     "max_drift_ppm": 50,
     "frame_check_tolerance_frames": 1,
-    "manual_offset_s": null
+    "manual_offset_s": null,
+    "anchors_waived": null
   },
   "editing": {
     "cut_at": "measured_pauses",
     "speech_threshold_dbfs": -50,
+    "retranscribe_missed": true,
     "room_tone_each_side_s": [
       0.15,
       0.35

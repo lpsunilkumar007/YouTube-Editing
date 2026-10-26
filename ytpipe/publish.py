@@ -42,6 +42,15 @@ def _fact_status(P):
     m = re.search(r"Result: \*\*(.+?)\*\*", open(f, encoding="utf-8").read())
     return f"- {m.group(1) if m else 'unknown'} (reports/fact_check.md)"
 
+def _sync_status(P):
+    """How the offset was established: pen/word anchors are the only proof on a silent desktop recording."""
+    p = os.path.join(P["analysis"], "sync.json")
+    if not os.path.exists(p): return "- not run"
+    r = json.load(open(p, encoding="utf-8"))["result"]
+    if r["status"] != "ok": return f"- **NOT verified**: {r['offset_s']} s, {r['method']} ({r.get('reason', '')})"
+    if r["method"].startswith("pen/word anchors") or "cross-correlation" in r["method"]: return f"- verified: {r['offset_s']} s, {r['method']}"
+    return f"- confirmed by you, not measured: {r['offset_s']} s, {r['method']}"
+
 def build(cfg, final_video=None):
     P = cfg["paths"]; out = os.path.join(P["root"], "publishing_package"); os.makedirs(out, exist_ok=True); st = state.load(cfg)
     items = {"full video": [final_video] if final_video else [], "captions": glob.glob(os.path.join(P["transcripts"], "*.srt")),
@@ -57,6 +66,7 @@ def build(cfg, final_video=None):
     lines = [f"# Publishing package: {cfg['project']['lecture_topic']}", "", f"Built {time.strftime('%Y-%m-%d %H:%M')}. Files are copies.", "",
              "## Approvals", ""] + [f"- {g}: {'**approved** ' + st['approvals'][g]['at'] if g in st['approvals'] else 'not approved'}" for g in state.GATES] + \
             ["", "## Fact check", "", _fact_status(P)] + \
+            ["", "## Camera/desktop sync", "", _sync_status(P)] + \
             ["", "## QA checks that ran", ""] + ([f"- {k}: {_count(v)} finding(s)" for k, v in qa.items()] or ["- none recorded"]) + \
             ["", "## Contents", ""]
     for k, fs in items.items():

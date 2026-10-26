@@ -4,6 +4,7 @@ Stages (in workflow order; each is restartable and records a checkpoint in <less
   init        validate config, create the lesson folders
   inspect     ffprobe facts -> analysis/metadata.json
   sync        offset/drift -> analysis/sync.json + reports/synchronization_report.md (stops with 'needs_input' if unsure)
+  listen      caption listen-check page for every '≈' line -> reports/listen_check.html (published as an Artifact)
   ink         --from/--to desktop seconds: glyphs written there + nearby words, to build timelines/sync_anchors.json
   transcribe  faster-whisper words (once) -> transcripts/words.json + transcript_draft.txt (to be corrected)
   analyze     slide area, slide changes, counter, ink, content masks, speech map, face track
@@ -70,11 +71,20 @@ def main(argv=None):
     off = lambda: _j(os.path.join(A, "sync.json"))["result"]["offset_s"]
     edl = lambda: _j(os.path.join(P["timelines"], "edl.json"))
     s = a.stage
-    if s == "init": print("ok:", P["root"])
+    if s == "init":
+        sa = os.path.join(P["timelines"], "sync_anchors.json"); os.makedirs(P["timelines"], exist_ok=True)
+        if not os.path.exists(sa):                         # PRODUCTION_PLAYBOOK C1: a silent desktop needs pen/word anchors
+            json.dump({"_note": "Pair 10+ spoken words (face clock, words.json) with the start of the ink that writes them (desktop clock): "
+                                "python -m ytpipe ink --from <desk s> --to <desk s>. See PRODUCTION_PLAYBOOK.md C1.", "anchors": []},
+                      open(sa, "w", encoding="utf-8"), indent=1)
+        print("ok:", P["root"], "(playbook: PRODUCTION_PLAYBOOK.md)")
     elif s == "inspect": m = sources.run(cfg); print(json.dumps({"pipeline": m["face_color_pipeline"], "desktop_audio": m["desktop_has_audio"], "warnings": m["warnings"]}, indent=1))
     elif s == "sync":
         r = sync.run(cfg, meta())["result"]; print(json.dumps(r, indent=1))
         if r["status"] != "ok": sys.exit("sync needs your input: see reports/synchronization_report.md, then set sync.manual_offset_s")
+    elif s == "listen":
+        from . import listen
+        out, ls = listen.run(cfg); print(len(ls), "lines to listen-check ->", out, "(Claude publishes it as a private Artifact with the db capability)")
     elif s == "ink":                                           # glyphs written between two desktop times + the words near them
         from . import analyze as az
         t0, t1 = float(a.from_), float(a.to)
@@ -103,7 +113,9 @@ def main(argv=None):
     elif s == "retakes":
         from . import retakes
         cuts, out, rp, missed = retakes.run(cfg, _j(os.path.join(P["transcripts"], "words.json")))
-        if missed: print(f"{len(missed)} stretch(es) of speech with no transcribed words: re-transcribe and listen (see {rp})")
+        if missed: print(f"{len(missed)} stretch(es) of speech the first transcription lost, re-heard in {rp}"
+                         + (f"; {sum(1 for m in missed if isinstance(m, dict) and m['instruction'])} contain a cut/pause instruction" if isinstance(missed[0], dict) else "")
+                         + ": read them, fix transcript.txt and add cuts")
         print(len(cuts), "proposed cuts,", sum(c["apply"] for c in cuts), "applied,", round(sum(c["face_out"] - c["face_in"] for c in cuts if c["apply"]), 1), "s:", rp)
     elif s == "sample":
         from . import sample
@@ -207,6 +219,12 @@ def main(argv=None):
                 seg0 = next(x for x in E["segments"] if x["edit_start"] <= c["start"] < x["edit_start"] + x["frames"] / 30)
                 seg1 = next(x for x in E["segments"] if x["edit_start"] < c["end"] <= x["edit_start"] + x["frames"] / 30)
                 F0, F1 = seg0["face_in"] + c["start"] - seg0["edit_start"], seg1["face_in"] + c["end"] - seg1["edit_start"]
+            wj_ = os.path.join(P["transcripts"], "words.json")
+            if os.path.exists(wj_):
+                bad, warn = shorts_v3.clip_problems(F0, F1, [w for g in _j(wj_)["segments"] for w in g.get("words", [])], E["segments"],
+                                                    np.load(os.path.join(A, "speech_env.npy")), cfg["editing"]["speech_threshold_dbfs"])
+                for w_ in warn: print(f"clip {k}: note: {w_}")
+                if bad and not a.force: sys.exit(f"clip {k}: " + "; ".join(bad) + " (fix candidates_curated.json, or --force)")
             ink = shorts_v3.ink_runs(cfg["sources"]["desktop_recording"], F0 + off_, F1 + off_, off_)
             parts = shorts_v3.plan(F0, F1, [l["face"] for l in lines if F0 <= l["face"] <= F1], env, ink)
             pipe = meta()["face_color_pipeline"] if os.path.exists(os.path.join(A, "metadata.json")) else "libplacebo"

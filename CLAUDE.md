@@ -24,6 +24,7 @@ This project produces technical teaching videos (Hinglish) and their publishing 
 - **Don't guess:** if sync, transcript wording or licensing is uncertain, ask. Mark unverified things as such.
 
 ## How to work
+- **Every video:** apply [PRODUCTION_PLAYBOOK.md](PRODUCTION_PLAYBOOK.md), the problems already solved and the checks that now run by default (sync anchors, lost speech, fact check, blank screens, listen-check, Shorts edges…).
 - **New lecture:** follow [VIDEO_EDITING_WORKFLOW.md](VIDEO_EDITING_WORKFLOW.md) using `python -m ytpipe <stage> --config lessons\<id>\video_project_config.json` ([REUSABLE_SYSTEM_README.md](REUSABLE_SYSTEM_README.md)).
 - **System and modules:** [YOUTUBE_CONTENT_PIPELINE.md](YOUTUBE_CONTENT_PIPELINE.md) · status and gaps: [COMPONENTS.md](COMPONENTS.md).
 - **Style:**
