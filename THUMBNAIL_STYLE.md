@@ -32,8 +32,9 @@ The v2 options for Lesson 02 were technically clean but weak as thumbnails: they
 | `journey` | Headline top-left; 3–4 node path (`nodes`: text, `flow`, `app`); large face right | Roadmaps, "from zero to …", step series |
 | `paper` | Face left; headline right; notebook page with a red-pen flowchart and a pen | Copy-and-pen, flowchart and algorithm lessons |
 | `stairs` | Headline top-left; rising staircase of stages (`steps`, low to high, optional `icons`: `flow`, `array`, `app`), star on the top step; large face right | Course intros, "basic to advanced", levels |
+| `decision` | Headline; a decision diamond (`cond`) with NO → red pill (`no`) and YES → lime pill (`yes`); large face right, or left with `side: "left"` (the diagram then sits clear of the shoulders) | If-else, conditions, any yes/no lesson |
 
-Options: `headline` (lines), `mark` (words on the yellow block), `frame_t` (pinned face frame), `person_h` / `person_dx` / `size`. Fonts load from `assets\fonts` (no network). Frames are taken at the source's full resolution.
+Options: `headline` (lines), `mark` (words on the yellow block), `frame_t` (pinned face frame; the frame must be in `face_analysis.json`; for a better expression, scan densely around good moments with `faces.analyse` and merge the rows), `person_h` / `person_dx` / `size`. Fonts load from `assets\fonts` (no network). Frames are taken at the source's full resolution.
 
 ## Why HTML/CSS
 Pillow can only draw flat text and shapes. v2 composes each thumbnail as HTML/CSS/SVG and renders it in headless Chrome (the browser HyperFrames already installed). That gives:

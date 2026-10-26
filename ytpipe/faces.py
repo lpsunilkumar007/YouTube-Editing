@@ -49,7 +49,8 @@ def analyse(cfg, spans, pipeline, fps=1.0, out_json=None):
             r = lm.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(fr)))
             if not r.face_landmarks: continue
             pts = np.array([(p.x * fr.shape[1], p.y * fr.shape[0]) for p in r.face_landmarks[0]])
-            x0, y0 = pts.min(0); x1, y1 = pts.max(0); bs = {c.category_name: c.score for c in r.face_blendshapes[0]}
+            x0, y0 = np.maximum(pts.min(0), 0); x1, y1 = np.minimum(pts.max(0), (fr.shape[1], fr.shape[0])); bs = {c.category_name: c.score for c in r.face_blendshapes[0]}
+            if x1 - x0 < 8 or y1 - y0 < 8: continue                      # face (almost) outside the frame
             yaw, pitch, roll = _pose(r.facial_transformation_matrixes[0])
             roi = cv2.cvtColor(fr[int(y0):int(y1), int(x0):int(x1)], cv2.COLOR_RGB2GRAY)
             rows.append({"t": round(t, 2), "box": [round(v * 1920 / fr.shape[1]) for v in (x0, y0, x1 - x0, y1 - y0)],
