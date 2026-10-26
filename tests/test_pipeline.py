@@ -72,3 +72,17 @@ def test_sample_picks_presenter_slide_and_cut():
     l, r = p[2][1]; assert (l["face_out"], r["face_in"], l["parent"], r["parent"]) == (40.0, 41.0, 1, 2)
     at = sample.pick({"segments": segs}, 30, at=[20.0])[0][1][0]                   # final-video 20 s = face 21 s
     assert at["parent"] == 1 and abs(at["face_in"] - 18.5) < 1e-9
+
+def test_blank_desktop_goes_to_presenter():
+    """'End of slide show' (black slide area) is found, a slide shot around it switches to the presenter at pauses,
+    and QA reports a blank still shown in a slide shot."""
+    import numpy as np
+    from ytpipe import analyze, timeline, qa
+    fr = np.full((40, analyze.AH, analyze.AW, 3), 30, np.uint8); fr[22:26] = 0; fr[27:28] = 0      # 11.0-13.0 s, 13.5-14.0 s at 2 fps
+    sp = analyze.blank_spans(fr, 2.0, [0, 0, 1920, 1080])
+    assert sp == [[11.0, 14.0]]
+    shots = [{"layout": "B", "face_in": 0.0, "face_out": 30.0}]
+    out = timeline.cover_blanks(shots, [(9.0, 12.0)], [(6.8, 7.2), (12.6, 13.0), (20.0, 20.5)])   # offset 2 s
+    assert [(s["layout"], s["face_in"], s["face_out"]) for s in out] == [("B", 0.0, 7.0), ("A", 7.0, 12.8), ("B", 12.8, 30.0)]
+    edl = [dict(s, edit_start=s["face_in"]) for s in shots]
+    assert qa.blank_shown(edl, sp, 2.0) and not qa.blank_shown([dict(s, edit_start=s["face_in"]) for s in out], sp, 2.0)

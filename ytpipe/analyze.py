@@ -50,6 +50,19 @@ def slide_changes(fr, fps, area, min_frac=0.008, settle=1.0):
         k += 1
     return out
 
+def blank_spans(fr, fps, area, thr=12, frac=0.9, gap=2.0):
+    """Desktop times [start, end] where the slide area is (almost) all black: PowerPoint's 'End of slide show' screen
+    or a black slide. Measured: 99.8 % of the area dark on those frames, at most 4 % on the dark-themed slides.
+    Spans closer than `gap` s merge."""
+    s = AW / 1920; x0, y0, x1, y1 = [int(round(v * s)) for v in area]
+    dark = (fr[:, y0:y1, x0:x1].max(-1) < thr).reshape(len(fr), -1).mean(1)
+    out = []
+    for i in np.nonzero(dark >= frac)[0]:
+        t = i / fps
+        if out and t - out[-1][1] <= gap: out[-1][1] = round(t + 1 / fps, 2)
+        else: out.append([round(t, 2), round(t + 1 / fps, 2)])
+    return out
+
 def counter_box(path, dur, changes, area, n_off=24, thr=30):
     """Full-resolution check of the bottom-right quarter of the slide: pixels that change across every slide change
     (frame 0.5 s before vs 0.5 s after) but stay static between changes (n_off pairs 0.5 s apart, away from changes)."""
@@ -144,7 +157,7 @@ def run(cfg, meta, steps=("desktop", "speech", "face")):
             cb = counter_box(desk, ddur, ch, area) if cfg["layout"]["counter"] == "auto" else cfg["layout"]["counter"]
             masks = content_masks(fr, 2.0, ch, ddur)
             np.savez_compressed(os.path.join(A, "content_masks.npz"), *masks)
-            res.update(slide_area=area, slide_changes=ch, counter_box=cb, ink=ink_events(desk, ddur)); del fr
+            res.update(slide_area=area, slide_changes=ch, counter_box=cb, ink=ink_events(desk, ddur), blank_spans=blank_spans(fr, 2.0, area)); del fr
         if "speech" in steps:
             env = speech.result()
             np.save(os.path.join(A, "speech_env.npy"), env.astype(np.float32))
