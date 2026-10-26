@@ -64,7 +64,8 @@ def shorts_from(P):
     for f in sorted(f for d in dirs for f in glob.glob(os.path.join(d, "*.md"))):
         md = open(f, encoding="utf-8").read(); t = re.search(r"\*\*Title:\*\* (.+)", md)
         c = re.search(r"\*\*Clip:\*\* (\d+):(\d\d)\D+\d+:\d\d of the final video \(([\d.]+) s\)", md)
-        if t: out.append((t.group(1).strip(), int(c.group(1)) * 60 + int(c.group(2)) if c else None, round(float(c.group(3))) if c else None))
+        n = re.search(r"\*\*Short:\*\* ([\d.]+) s", md)                      # the rendered Short's length (pauses tightened)
+        if t: out.append((t.group(1).strip(), int(c.group(1)) * 60 + int(c.group(2)) if c else None, round(float(n.group(1) if n else c.group(3))) if c else None))
     return out
 
 def check(inp, words):
