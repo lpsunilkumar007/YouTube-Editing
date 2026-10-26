@@ -57,3 +57,19 @@ def test_pause_instruction_removes_only_the_break():
     assert len(c) == 1 and c[0]["confidence"] == "high" and c[0]["apply"]
     assert 2.0 < c[0]["face_in"] < 2.65 and 22.5 < c[0]["face_out"] < 23.0         # same utterance (gap 0.3 s): the sentence before stays
     assert c[0]["after"].startswith("aage badhte hue")
+
+def test_untranscribed_speech_is_flagged_even_under_a_stretched_word():
+    """lesson04: the recognizer stretched one word over 8 s of a fumble; the level map still shows talking there."""
+    import numpy as np
+    W = [(0.0, 0.4, "a"), (0.5, 9.0, "aapko"), (9.1, 9.5, "pata"), (20.0, 20.4, "b")]
+    env = np.full(2100, -70.0); env[50:900] = -25.0                  # talking 0.5-9.0 s, silence 9.5-20 s
+    assert retakes.untranscribed(W, env, -50.0) == [[1.7, 9.1]]
+
+def test_rerun_keeps_hand_added_cuts(tmp_path):
+    import json, os
+    from tests.test_core import make_cfg
+    cfg = make_cfg(tmp_path); P = cfg["paths"]; os.makedirs(P["timelines"], exist_ok=True)
+    hand = {"face_in": 50.0, "face_out": 60.0, "reason": "fact correction", "confidence": "high", "apply": True, "before": "", "removed": "", "after": ""}
+    json.dump([hand], open(os.path.join(P["timelines"], "content_cuts.json"), "w"))
+    cuts, *_ = retakes.run(cfg, {"segments": [{"words": [[0.0, 0.4, "hello"], [0.5, 0.9, "there"]]}]})
+    assert [c["reason"] for c in cuts] == ["fact correction"]

@@ -101,13 +101,28 @@ def detect(asr, strong=STRONG, weak=WEAK, pause=PAUSE, resume=RESUME, pauses=Non
         else: merged.append(c)
     return merged
 
-def report(cuts, path):
+def untranscribed(W, env, thr=-45.0, min_s=3.0, step=0.01, active=0.4):
+    """Gaps between transcribed words where the narration level says someone is talking (>= `active` of the gap above
+    `thr` dBFS) for >= min_s: the recognizer dropped speech there. A fumble or a spoken cut instruction can hide in such a
+    gap (lesson04: 8 s at 590 s), so each one is re-transcribed and reviewed before the cuts are final."""
+    out = []                                     # a word "lasting" seconds is the recognizer stretching over lost speech
+    for (a, b) in zip([min(w[1], w[0] + 1.2) for w in W[:-1]], [w[0] for w in W[1:]]):
+        if b - a < min_s: continue
+        seg = env[int(a / step):int(b / step)]
+        if len(seg) and (seg > thr).mean() >= active: out.append([round(a, 2), round(b, 2)])
+    return out
+
+def report(cuts, path, missed=()):
     mm = lambda t: f"{int(t // 60)}:{t % 60:05.2f}"
     L = ["# Content cuts (proposal)", "", "Face-camera times. `apply: true` cuts go into the timeline proposal; set false to keep a part,",
          "true to cut a low-confidence one. Review each: nothing good lost, and the restart starts cleanly.", ""]
     for n, c in enumerate(cuts, 1):
         L += [f"## {n}. {mm(c['face_in'])} – {mm(c['face_out'])} ({c['face_out'] - c['face_in']:.1f} s) · {c['confidence']} · apply: {str(c['apply']).lower()}", "",
               f"{c['reason']}", "", f"- before: …{c['before']}", f"- **removed:** {c['removed']}", f"- after: {c['after']}…", ""]
+    if missed:
+        L += ["## Speech the recognizer missed (review before the cuts are final)", "",
+              "You are talking here but no words were transcribed: re-transcribe each span and listen for a fumble or a cut instruction.", ""]
+        L += [f"- {mm(a)} – {mm(b)} ({b - a:.1f} s)" for a, b in missed] + [""]
     open(path, "w", encoding="utf-8").write("\n".join(L))
     return path
 
@@ -116,7 +131,12 @@ def run(cfg, asr):
     cuts = detect(asr, pauses=json.load(open(an, encoding="utf-8")).get("pauses") if os.path.exists(an) else None); os.makedirs(P["timelines"], exist_ok=True); os.makedirs(P["reports"], exist_ok=True)
     out = os.path.join(P["timelines"], "content_cuts.json")
     if os.path.exists(out):                                          # keep reviewed apply decisions for cuts that still exist
-        old = {(round(c["face_in"], 1), round(c["face_out"], 1)): c["apply"] for c in json.load(open(out, encoding="utf-8"))}
+        prev = json.load(open(out, encoding="utf-8"))
+        old = {(round(c["face_in"], 1), round(c["face_out"], 1)): c["apply"] for c in prev}
         for c in cuts: c["apply"] = old.get((round(c["face_in"], 1), round(c["face_out"], 1)), c["apply"])
+        cuts += [c for c in prev if not any(c["face_in"] < k["face_out"] and k["face_in"] < c["face_out"] for k in cuts)]  # hand-added cuts stay
+        cuts.sort(key=lambda c: c["face_in"])
     json.dump(cuts, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    return cuts, out, report(cuts, os.path.join(P["reports"], "content_cuts.md"))
+    ej = os.path.join(P["analysis"], "speech_env.npy")
+    missed = untranscribed(words_of(asr), __import__("numpy").load(ej), cfg["editing"]["speech_threshold_dbfs"]) if os.path.exists(ej) else []
+    return cuts, out, report(cuts, os.path.join(P["reports"], "content_cuts.md"), missed), missed

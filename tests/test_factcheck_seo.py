@@ -35,3 +35,11 @@ def test_title_rules(tmp_path):
     bad = dict(inp, titles=[{"angle": "s", "title": "SHOCKING Trick You Won't Believe | Lesson 4, an extremely long title"}])
     p = metadata.seo(cfg, bad, "word " * 250, ch, tags)
     for want in ("cut off on phones", "search phrase", "lesson number", "clickbait", "all-caps"): assert any(want in x for x in p), (want, p)
+
+def test_verdicts_follow_their_text_when_ids_shift():
+    fc = {"claims": [{"id": "c001", "text": "4 + 5 = 9", "verdict": "correct"}, {"id": "c002", "text": "11 % 2 = 1", "verdict": "correct"}]}
+    cl = [{"id": "c001", "face": 1.0, "final": 1.0, "text": "a new line is 2 things"}, {"id": "c002", "face": 2.0, "final": 2.0, "text": "4 + 5 = 9"},
+          {"id": "c003", "face": 3.0, "final": 3.0, "text": "11 % 2 = 1"}]
+    v = factcheck.verdicts(cl, fc)
+    assert v["c002"]["text"] == "4 + 5 = 9" and v["c003"]["text"] == "11 % 2 = 1" and "c001" not in v
+    assert factcheck.check(cl, fc) == ["c001 has no verdict: a new line is 2 things"]

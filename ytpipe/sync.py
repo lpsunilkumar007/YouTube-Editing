@@ -4,7 +4,9 @@
                Coarse (clocks, finalisation delay): +-2.5 s. Always computed, used as the search prior.
 2. audio_xcorr: only if BOTH files carry real audio. Coarse envelope cross-correlation over the whole overlap, then
                refined at 16 kHz in windows at start / middle / end -> offset, drift (ppm), confidence (peak/sidelobe).
-3. manual    : sync.manual_offset_s (set by the user after checking the anchors this stage lists).
+3. anchors   : timelines/sync_anchors.json, spoken words paired with the ink that writes them (silent OBS audio). See
+               anchor_offset. Preferred over everything except a manual value, which must agree with it.
+4. manual    : sync.manual_offset_s (set by the user after checking the anchors this stage lists).
 If the best available estimate is less certain than sync.max_uncertainty_s, status = "needs_input": the pipeline stops
 and the report lists slide-change / ink anchors to confirm by eye (as done for Lesson 01, which had silent OBS audio)."""
 import datetime as dt, json, os
@@ -63,13 +65,38 @@ def audio_estimate(face, desk, prior=None, win_s=30.0):
             "uncertainty_s": round(float(max(0.005, np.ptp(offs) / 2)), 4), "drift_ppm": round(drift_ppm, 1),
             "points": pts, "coarse_confidence": round(conf, 2)}
 
+def anchor_offset(anchors, min_n=5, max_lag=2.0):
+    """Anchors = [{word, face, desk}]: a spoken word (face-camera clock, words.json) and the moment its ink starts on the
+    desktop (desktop clock, the first new red pixels of that glyph at 10 fps). While dictating, writing follows the word by
+    0-1.5 s and does not come first (never show a step before it is spoken), so the offset is the SECOND-smallest
+    desk - face (one early outlier from word timing is tolerated); every other anchor then shows its ink after its word.
+    Measured 2026-10-26: Lesson 04 anchors span 2.6-3.9 s -> +2.8 s (the manual -2.0 s had the pen 4.8 s late);
+    Lesson 03 0.2-1.1 s -> +0.3 s. Pen-tap audio and hand motion gave no reliable answer on either."""
+    d = sorted(round(a["desk"] - a["face"], 3) for a in anchors)
+    if len(d) < min_n:
+        return {"status": "needs_input", "offset_s": None, "n": len(d), "reason": f"{len(d)} sync anchors; at least {min_n} needed"}
+    off = d[1]; lags = [round(x - off, 2) for x in d]
+    r = {"status": "ok", "offset_s": off, "n": len(d), "lag_after_word_s": [lags[0], lags[-1]]}
+    if lags[-1] > max_lag:
+        r.update(status="needs_input", reason=f"anchors disagree: ink {lags[-1]} s after its word at the largest; check the pairs")
+    return r
+
 def run(cfg, meta):
     rep = {"metadata": metadata_estimate(meta), "audio": None, "manual": cfg["sync"]["manual_offset_s"]}
+    aj = os.path.join(cfg["paths"]["timelines"], "sync_anchors.json")
+    rep["anchors"] = anchor_offset(json.load(open(aj, encoding="utf-8"))["anchors"]) if os.path.exists(aj) else None
     if meta["desktop_has_audio"]:
         rep["audio"] = audio_estimate(cfg["sources"]["face_camera"], cfg["sources"]["desktop_recording"])
     maxu = cfg["sync"]["max_uncertainty_s"]
+    an = rep["anchors"]
     if rep["manual"] is not None:
         res = {"status": "ok", "offset_s": float(rep["manual"]), "method": "manual (user-confirmed)", "uncertainty_s": None}
+        if an and an["status"] == "ok" and abs(an["offset_s"] - res["offset_s"]) > 0.3:
+            res.update(status="needs_input", reason=f"the manual offset contradicts the pen/word anchors ({an['offset_s']} s, "
+                                                     f"{an['n']} pairs) by {abs(an['offset_s'] - res['offset_s']):.1f} s")
+    elif an and an["status"] == "ok":
+        res = {"status": "ok", "offset_s": an["offset_s"], "method": f"pen/word anchors ({an['n']} pairs, ink "
+               f"{an['lag_after_word_s'][0]}..{an['lag_after_word_s'][1]} s after the word)", "uncertainty_s": 0.2}
     elif rep["audio"] and rep["audio"]["status"] == "ok" and rep["audio"]["uncertainty_s"] <= maxu:
         a = rep["audio"]; res = {"status": "ok", "offset_s": a["offset_s"], "method": "audio cross-correlation",
                                  "uncertainty_s": a["uncertainty_s"], "drift_ppm": a["drift_ppm"]}
@@ -94,6 +121,11 @@ def _report(cfg, rep):
         + (f", ±{r['uncertainty_s']} s" if r.get("uncertainty_s") else "") + ").", ""]
     if r.get("reason"): lines += [f"**Needs your input:** {r['reason']}", ""]
     m = rep["metadata"]; lines += ["## Metadata estimate", "", (f"{m['offset_s']} s ± {m['uncertainty_s']} s ({m['basis']})" if m else "unavailable"), ""]
+    an = rep.get("anchors")
+    lines += ["## Pen/word anchors", "", ("none yet: add timelines/sync_anchors.json (spoken word + its ink, see sync.anchor_offset; "
+              "`python -m ytpipe ink --from <desk s> --to <desk s>` lists glyphs and nearby words)" if not an else
+              f"{an['status']}: {an.get('offset_s')} s from {an['n']} pairs" + (f"; ink {an['lag_after_word_s'][0]}..{an['lag_after_word_s'][1]} s after its word" if an.get("lag_after_word_s") else "")
+              + (f". {an['reason']}" if an.get("reason") else "")), ""]
     a = rep["audio"]
     lines += ["## Audio cross-correlation", ""]
     if not a: lines += ["Not possible: the desktop recording has no usable audio.", ""]
@@ -102,8 +134,8 @@ def _report(cfg, rep):
                   "| face time (s) | offset (s) | confidence |", "|---|---|---|"] + \
                  [f"| {p['face_t']} | {p['offset_s']} | {p['confidence']} |" for p in a.get("points", [])] + [""]
     lines += ["After the full render, `qa.sync_checks` compares the rendered slide shots with the raw desktop frames at pen "
-              "strokes and slide changes (catches local deviations like Lesson 01's 1–3 frame lag). If neither happens inside a "
-              "slide shot, QA says the sync is not verified: confirm the offset by eye."]
+              "strokes and slide changes. That proves the render shows the planned desktop frames (catches local lags like "
+              "Lesson 01's 1–3 frames); it does NOT prove the offset. Only the anchors above do."]
     os.makedirs(cfg["paths"]["reports"], exist_ok=True)
     with open(os.path.join(cfg["paths"]["reports"], "synchronization_report.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
