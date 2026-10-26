@@ -39,6 +39,10 @@ def test_render_abc_segments(tmp_path):
         assert render.frame_count(out) == 60
         v = next(s for s in media.probe(out)["streams"] if s["codec_type"] == "video"); assert (v["width"], v["height"]) == (1920, 1080)
     j = render.join(parts, str(tmp_path / "joined.mkv")); assert render.frame_count(j) == 180 and not media.decode_errors(j)
+    ts = [float(x) for x in media.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "frame=best_effort_timestamp_time",
+                                         "-of", "csv=p=0", j]).stdout.decode().replace(",", "").split()]
+    assert max(b - a for a, b in zip(sorted(ts), sorted(ts)[1:])) < 1.5 / 30    # no timestamp gap at the joins (A/V drift)
+    assert min(ts) < 1e-3 and abs(max(ts) - 179 / 30) < 1e-3                       # starts at 0, frame k at k/30
     # camera circle: pixels inside the circle differ from the canvas colour, pixels just outside the ring do not (B segment)
     f = media.frames(parts[1], 1.0, 0.04, 1920, 1080, 30, pix="rgb24")[0].astype(int)
     cx, cy, d = g["camera"]; c = f[cy + d // 2, cx + d // 2]; o = f[cy + d // 2, min(1919, cx + d + 14)]

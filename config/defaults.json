@@ -185,7 +185,29 @@
       "playlist": "{{PLAYLIST_URL}}",
       "instagram": "{{INSTAGRAM_URL}}"
     },
-    "credits": "config/credits.json"
+    "credits": "config/credits.json",
+    "seo": {
+      "_note": "Research-based rules (YouTube 'On YouTube's recommendation system': satisfaction, valued watch time; YouTube Help: chapters; creator SEO guides). Each video records its own dated research in description_input.json 'research'.",
+      "title_mobile_chars": 60,
+      "phrase_within_chars": 35,
+      "description_min_words": 200,
+      "tags_range": [
+        5,
+        15
+      ],
+      "research_max_age_days": 120,
+      "min_sources": 2,
+      "clickbait": [
+        "shocking",
+        "you won't believe",
+        "secret",
+        "must watch",
+        "guaranteed",
+        "100%",
+        "gone wrong",
+        "exposed"
+      ]
+    }
   },
   "shorts": {
     "enabled": true,
@@ -282,5 +304,8 @@
     "structured_data": "auto",
     "internal_links_max": 5,
     "keychain_service": "ytpipe-wordpress"
+  },
+  "factcheck": {
+    "required": true
   }
 }
