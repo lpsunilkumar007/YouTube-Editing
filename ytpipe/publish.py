@@ -61,7 +61,7 @@ def build(cfg, final_video=None):
             ["", "## Contents", ""]
     for k, fs in items.items():
         lines.append(f"**{k}:** " + (", ".join(os.path.basename(f) for f in fs) if fs else "_missing_"))
-        sub = os.path.join(out, k.replace(" ", "_")); os.makedirs(sub, exist_ok=True)
+        sub = os.path.join(out, k.replace(" ", "_")); shutil.rmtree(sub, ignore_errors=True); os.makedirs(sub)   # copies only: no stale files
         for f in fs:
             dst = os.path.join(sub, os.path.relpath(f, os.path.join(P["root"], "blog")) if k == "blog" else os.path.basename(f))
             os.makedirs(os.path.dirname(dst), exist_ok=True)

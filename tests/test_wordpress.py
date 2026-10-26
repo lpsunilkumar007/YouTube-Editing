@@ -183,3 +183,12 @@ def test_package_keeps_blog_screens_and_wordpress_reports(tmp_path):
     (d / "wordpress" / "dry_run.md").write_text("x"); (d / "wordpress" / "state.json").write_text("{}")
     names = [os.path.relpath(f, d) for f in publish._blog(str(d))]
     assert names == ["a.md", "screens/slide_05.png", "wordpress/dry_run.md"]          # unused stills and state stay out
+
+def test_package_drops_stale_copies(tmp_path):
+    """A Short dropped from metadata/shorts disappears from the package on the next build."""
+    from ytpipe import publish
+    from tests.test_core import make_cfg
+    cfg = make_cfg(tmp_path); P = cfg["paths"]; m = os.path.join(P["metadata"], "shorts"); os.makedirs(m, exist_ok=True)
+    for n in ("01_a.md", "02_b.md"): open(os.path.join(m, n), "w").write("**Title:** x\n")
+    out = publish.build(cfg); os.remove(os.path.join(m, "02_b.md")); publish.build(cfg)
+    assert sorted(os.listdir(os.path.join(out, "shorts_metadata"))) == ["01_a.md"]
