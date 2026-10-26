@@ -11,3 +11,11 @@ def test_too_few_or_disagreeing_anchors_need_input():
     assert sync.anchor_offset([{"face": 1, "desk": 2}] * 3)["status"] == "needs_input"
     r = sync.anchor_offset([{"face": 0, "desk": x} for x in (1.0, 1.1, 1.2, 1.3, 6.0)])
     assert r["status"] == "needs_input" and "disagree" in r["reason"]
+
+def test_silent_desktop_needs_anchors_or_a_waiver(tmp_path):
+    from tests.test_core import make_cfg
+    cfg = make_cfg(tmp_path); cfg["sync"]["manual_offset_s"] = -2.0
+    meta = {"desktop_has_audio": False, "face_camera": {}, "desktop_recording": {}}
+    assert sync.run(cfg, meta)["result"]["status"] == "needs_input"
+    cfg["sync"]["anchors_waived"] = "no writing in this lecture"
+    assert sync.run(cfg, meta)["result"]["status"] == "ok"

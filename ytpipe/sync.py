@@ -88,12 +88,17 @@ def run(cfg, meta):
     if meta["desktop_has_audio"]:
         rep["audio"] = audio_estimate(cfg["sources"]["face_camera"], cfg["sources"]["desktop_recording"])
     maxu = cfg["sync"]["max_uncertainty_s"]
-    an = rep["anchors"]
+    an = rep["anchors"]; waived = cfg["sync"].get("anchors_waived")
     if rep["manual"] is not None:
         res = {"status": "ok", "offset_s": float(rep["manual"]), "method": "manual (user-confirmed)", "uncertainty_s": None}
         if an and an["status"] == "ok" and abs(an["offset_s"] - res["offset_s"]) > 0.3:
             res.update(status="needs_input", reason=f"the manual offset contradicts the pen/word anchors ({an['offset_s']} s, "
                                                      f"{an['n']} pairs) by {abs(an['offset_s'] - res['offset_s']):.1f} s")
+        elif not meta["desktop_has_audio"] and not (an and an["status"] == "ok") and not waived:
+            res.update(status="needs_input", reason="a manual offset on a silent desktop recording must be backed by pen/word anchors "
+                       "(timelines/sync_anchors.json): lesson04's unchecked manual offset put the pen 4.8 s late. If the lecture has "
+                       "no writing to anchor on, set sync.anchors_waived to the reason")
+        elif waived and not an: res["method"] += f"; anchors waived: {waived}"
     elif an and an["status"] == "ok":
         res = {"status": "ok", "offset_s": an["offset_s"], "method": f"pen/word anchors ({an['n']} pairs, ink "
                f"{an['lag_after_word_s'][0]}..{an['lag_after_word_s'][1]} s after the word)", "uncertainty_s": 0.2}

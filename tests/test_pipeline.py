@@ -92,3 +92,11 @@ def test_slides_flashed_around_a_blank_are_covered_too():
     from ytpipe import timeline
     assert timeline.widen_blanks([[363.5, 365.0]], [100.0, 362.5, 363.5, 366.0, 380.0]) == [[362.0, 366.0]]
     assert timeline.widen_blanks([[50.0, 52.0]], [10.0, 60.0]) == [[50.0, 52.0]]
+
+def test_short_must_not_start_inside_a_spoken_word():
+    import numpy as np
+    from ytpipe import shorts_v3
+    env = np.full(1000, -70.0); env[300:345] = -30.0                       # '...hai' 3.0-3.45 s, then a pause
+    words = [(2.9, 3.45, "hai"), (3.7, 4.0, "jab")]
+    assert shorts_v3.clip_problems(3.35, 9.0, words, [], env)[0]           # starts on the tail of 'hai'
+    assert not shorts_v3.clip_problems(3.6, 9.0, words, [], env)[0]        # starts in the pause

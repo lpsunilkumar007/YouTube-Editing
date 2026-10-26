@@ -203,6 +203,21 @@ def _fit(crop, box_w, box_h):
     s = min(box_w / crop[2], box_h / crop[3]); w, h = int(crop[2] * s) // 2 * 2, int(crop[3] * s) // 2 * 2
     return w, h, (box_w - w) // 2, (box_h - h) // 2
 
+def clip_problems(F0, F1, words, segments, env=None, thr=-50.0):
+    """A Short must start and end between words and should not jump across a cut in the lecture (removed content cannot
+    come back, but the jump shows). An edge is mid-word when a transcribed word spans it AND the narration level there
+    says the presenter is speaking (ASR word ends are approximate; a measured pause wins). words: [(start, end, ...)]
+    face time; env: speech level per 10 ms. -> (refuse [], warn [])."""
+    def speaking(e, side):                       # the 50 ms the Short would cut off: before its start, after its end
+        k = int(e * 100); seg = env[max(0, k - 5):k + 1] if side < 0 else env[k:k + 6]
+        return env is None or (len(seg) and seg.max() > thr)
+    refuse = [f"{'start' if e == F0 else 'end'} {e:.2f} s falls inside the word '{str(w[2]).strip()}' ({w[0]:.2f}-{w[1]:.2f} s): "
+              "move it to the pause before or after" for e, side in ((F0, -1), (F1, 1)) for w in words
+              if w[0] + 0.03 < e < min(w[1], w[0] + 1.2) - 0.03 and speaking(e, side)]
+    warn = [f"jumps across the lecture's cut at {a['face_out']:.2f} -> {b['face_in']:.2f} s"
+            for a, b in zip(segments, segments[1:]) if b["face_in"] - a["face_out"] > 0.05 and F0 < a["face_out"] and b["face_in"] < F1]
+    return refuse, warn
+
 def pieces_of(parts, segments=None, cut_out=()):
     """[(face_a, face_b, layout, part_f0, part_f1)]: the parts minus the lecture's own cuts (so the final's audio stays in
     sync) and minus tightened pause cores. Crops are computed on the whole part, so a jump cut keeps its framing."""

@@ -112,6 +112,30 @@ def untranscribed(W, env, thr=-45.0, min_s=3.0, step=0.01, active=0.4):
         if len(seg) and (seg > thr).mean() >= active: out.append([round(a, 2), round(b, 2)])
     return out
 
+def retranscribe(cfg, spans, cache_json, pad=0.5):
+    """Each missed span heard again on its own (no VAD, no previous-text conditioning), in Hindi and in English, so a
+    fumble or a cut instruction shows as words. -> [{start, end, hi, en, instruction}] (cached per span)."""
+    cache = json.load(open(cache_json, encoding="utf-8")) if os.path.exists(cache_json) else {}
+    todo = [sp for sp in spans if f"{sp[0]:.2f}-{sp[1]:.2f}" not in cache]
+    if todo:
+        from faster_whisper import WhisperModel
+        from . import media
+        t = cfg["transcription"]; x = media.audio(cfg["sources"]["face_camera"], sr=16000)
+        model = WhisperModel(t["model"], device="cpu", compute_type=t["compute_type"])
+        for a, b in todo:
+            clip = x[int(max(0, a - pad) * 16000):int((b + pad) * 16000)]; r = {}
+            for lang in ("hi", "en"):
+                segs, _ = model.transcribe(clip, language=lang, vad_filter=False, condition_on_previous_text=False)
+                r[lang] = " ".join(sg.text.strip() for sg in segs)
+            cache[f"{a:.2f}-{b:.2f}"] = r
+        json.dump(cache, open(cache_json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    out = []
+    for a, b in spans:
+        r = cache[f"{a:.2f}-{b:.2f}"]; txt = (r["hi"] + " " + r["en"]).lower()
+        out.append({"start": a, "end": b, "hi": r["hi"], "en": r["en"],
+                    "instruction": any(re.search(k, txt) for k in STRONG + PAUSE)})
+    return out
+
 def report(cuts, path, missed=()):
     mm = lambda t: f"{int(t // 60)}:{t % 60:05.2f}"
     L = ["# Content cuts (proposal)", "", "Face-camera times. `apply: true` cuts go into the timeline proposal; set false to keep a part,",
@@ -122,7 +146,12 @@ def report(cuts, path, missed=()):
     if missed:
         L += ["## Speech the recognizer missed (review before the cuts are final)", "",
               "You are talking here but no words were transcribed: re-transcribe each span and listen for a fumble or a cut instruction.", ""]
-        L += [f"- {mm(a)} – {mm(b)} ({b - a:.1f} s)" for a, b in missed] + [""]
+        for m in missed:
+            if isinstance(m, dict):
+                L += [f"- {mm(m['start'])} – {mm(m['end'])} ({m['end'] - m['start']:.1f} s)" + (" · **contains a cut/pause instruction**" if m["instruction"] else ""),
+                      f"  - heard (hi): {m['hi'] or '—'}", f"  - heard (en, may be translated): {m['en'] or '—'}"]
+            else: L += [f"- {mm(m[0])} – {mm(m[1])} ({m[1] - m[0]:.1f} s)"]
+        L += [""]
     open(path, "w", encoding="utf-8").write("\n".join(L))
     return path
 
@@ -139,4 +168,6 @@ def run(cfg, asr):
     json.dump(cuts, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     ej = os.path.join(P["analysis"], "speech_env.npy")
     missed = untranscribed(words_of(asr), __import__("numpy").load(ej), cfg["editing"]["speech_threshold_dbfs"]) if os.path.exists(ej) else []
+    if missed and cfg["editing"].get("retranscribe_missed", True):
+        missed = retranscribe(cfg, missed, os.path.join(P["analysis"], "missed_speech.json"))
     return cuts, out, report(cuts, os.path.join(P["reports"], "content_cuts.md"), missed), missed

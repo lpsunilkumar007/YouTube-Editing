@@ -1,0 +1,194 @@
+<title>Caption Listen-Check</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow reading column; a sticky progress bar; one row per caption line, grouped by video. */
+:root {
+  --paper: #F7F8FA;
+  --card: #FFFFFF;
+  --ink: #16202E;
+  --muted: #5B6676;
+  --line: #DDE2EA;
+  --pen: #C8102E;           /* the red pen on the slides */
+  --pen-soft: #FCE8EB;
+  --ok: #1E7A46;
+  --ok-soft: #E3F4EA;
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --body: "Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0E141D; --card: #16202C; --ink: #E8EDF3; --muted: #9AA6B6; --line: #26323F;
+    --pen: #FF5A6E; --pen-soft: #3A1820; --ok: #5FD08F; --ok-soft: #12301F;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0E141D; --card: #16202C; --ink: #E8EDF3; --muted: #9AA6B6; --line: #26323F;
+  --pen: #FF5A6E; --pen-soft: #3A1820; --ok: #5FD08F; --ok-soft: #12301F;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font: 17px/1.55 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+main { max-width: 720px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 28px; }
+h1 { font: 800 clamp(28px, 6vw, 40px)/1.1 var(--display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font: 600 22px/1.2 var(--display); margin: 0; text-wrap: balance; }
+.intro { display: grid; gap: 10px; color: var(--muted); }
+.intro p { margin: 0; max-width: 62ch; }
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper);
+  padding-block: 10px; border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+}
+.meter { flex: 1 1 200px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
+.count { font: 500 14px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.status { font-size: 14px; color: var(--muted); }
+section { display: grid; gap: 14px; }
+.sub { color: var(--muted); font-size: 15px; margin: 0; }
+ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+li.row { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+li.row[data-state="ok"] { border-left-color: var(--ok); }
+li.row[data-state="fix"] { border-left-color: var(--pen); }
+.top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.time { font: 500 14px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.pill { font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.fix { background: var(--pen-soft); color: var(--pen); }
+audio { width: 100%; height: 40px; }
+.text { margin: 0; font-size: 18px; }
+.text .guess { color: var(--pen); font-weight: 700; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+button {
+  font: 700 15px var(--body); padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+}
+button:hover { border-color: var(--muted); }
+button:focus-visible, textarea:focus-visible { outline: 3px solid var(--pen); outline-offset: 2px; }
+button.good { border-color: var(--ok); color: var(--ok); }
+button.good[aria-pressed="true"] { background: var(--ok); color: var(--card); }
+button.edit[aria-pressed="true"] { border-color: var(--pen); color: var(--pen); }
+button.save { background: var(--ink); color: var(--card); border-color: var(--ink); }
+button:disabled { opacity: .45; cursor: default; }
+.editor { display: grid; gap: 8px; }
+textarea { width: 100%; min-height: 90px; font: 17px/1.5 var(--body); padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); resize: vertical; }
+.hint { font-size: 14px; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
+</style>
+
+<main>
+  <header class="intro">
+    <h1>__H1__</h1>
+    <p>These caption lines were partly guessed where the recording was unclear. Play each one, then mark it correct or type what you actually said. Words in [brackets] were added to complete a sentence. They show on screen but you didn't say them.</p>
+    <p>Your answers save as you go. When you're done, tell Claude in the terminal and the captions will be updated from them.</p>
+  </header>
+
+  <div class="bar" role="status">
+    <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+    <span class="count" id="count">0 / 0 checked</span>
+    <span class="status" id="saveState">Loading saved answers…</span>
+  </div>
+
+  <div id="groups"></div>
+</main>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const LINES = JSON.parse(document.getElementById("data").textContent);
+const answers = {};          // id -> {status: "ok" | "fix", text}
+let db = null, canWrite = true;
+
+const fmt = t => t == null ? "—" : `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const marked = s => esc(s).replace(/\[([^\]]+)\]/g, '<span class="guess">[$1]</span>');
+
+function render() {
+  const root = document.getElementById("groups"); root.innerHTML = "";
+  const videos = [...new Set(LINES.map(l => l.video))];
+  for (const v of videos) {
+    const rows = LINES.filter(l => l.video === v);
+    const sec = document.createElement("section");
+    sec.innerHTML = `<h2>${esc(v)}</h2><p class="sub">${rows.length} lines. Times are in the finished video.</p><ol></ol>`;
+    const ol = sec.querySelector("ol");
+    for (const l of rows) ol.appendChild(row(l));
+    root.appendChild(sec);
+  }
+  progress();
+}
+
+function row(l) {
+  const a = answers[l.id];
+  const li = document.createElement("li"); li.className = "row"; li.id = "r-" + l.id;
+  if (a) li.dataset.state = a.status;
+  li.innerHTML = `
+    <div class="top"><span class="time">${fmt(l.final)}</span>${a ? `<span class="pill ${a.status}">${a.status === "ok" ? "Correct" : "Fix saved"}</span>` : ""}</div>
+    <audio controls preload="none" src="${l.audio}"></audio>
+    <p class="text">${marked(a && a.status === "fix" ? a.text : l.text)}</p>
+    <div class="actions">
+      <button class="good" id="ok-${l.id}" aria-pressed="${a?.status === "ok"}" ${canWrite ? "" : "disabled"}>Correct as written</button>
+      <button class="edit" id="edit-${l.id}" aria-pressed="${a?.status === "fix"}" ${canWrite ? "" : "disabled"}>Needs a fix</button>
+    </div>`;
+  li.querySelector(".good").onclick = () => save(l, { status: "ok", text: l.text });
+  li.querySelector(".edit").onclick = () => openEditor(li, l);
+  return li;
+}
+
+function openEditor(li, l) {
+  if (li.querySelector(".editor")) return;
+  const cur = answers[l.id]?.status === "fix" ? answers[l.id].text : l.text;
+  const box = document.createElement("div"); box.className = "editor";
+  box.innerHTML = `<label class="hint" for="t-${l.id}">Type the line as you said it (Roman Hinglish is fine).</label>
+    <textarea id="t-${l.id}"></textarea>
+    <div class="actions"><button class="save">Save fix</button><button class="cancel">Cancel</button></div>`;
+  box.querySelector("textarea").value = cur;
+  box.querySelector(".save").onclick = () => {
+    const t = box.querySelector("textarea").value.trim();
+    if (t) save(l, { status: "fix", text: t });
+  };
+  box.querySelector(".cancel").onclick = () => box.remove();
+  li.appendChild(box); box.querySelector("textarea").focus();
+}
+
+async function save(l, ans) {
+  answers[l.id] = ans;
+  const old = document.getElementById("r-" + l.id); old.replaceWith(row(l)); progress();
+  if (!db) { setState("Not saved: this view can't store answers. Open the page on claude.ai to save."); return; }
+  setState("Saving…");
+  try {
+    await db.collection("reviews").doc(l.id).set({ ...ans, original: l.text, video: l.video, final: l.final, at: new Date().toISOString() });
+    setState("All answers saved");
+  } catch (e) {
+    if (e && e.code === "invalid_argument") { canWrite = false; render(); setState("You can listen here, but only the owner can save answers."); }
+    else setState("Couldn't save that answer. Check your connection and press the button again.");
+  }
+}
+
+function progress() {
+  const n = Object.keys(answers).filter(id => LINES.some(l => l.id === id)).length;
+  document.getElementById("count").textContent = `${n} / ${LINES.length} checked`;
+  document.getElementById("meter").style.width = (100 * n / LINES.length) + "%";
+}
+const setState = s => document.getElementById("saveState").textContent = s;
+
+render();
+(async () => {
+  db = await window.claude?.use?.("db") ?? null;
+  if (!db) { setState("Answers can't be saved in this view"); return; }
+  db.collection("reviews").onSnapshot(snap => {
+    for (const ch of snap.docChanges()) {
+      const id = ch.doc.id, l = LINES.find(x => x.id === id); if (!l) continue;
+      if (ch.type === "removed") delete answers[id];
+      else { const x = ch.doc.data(); answers[id] = { status: x.status, text: x.text }; }
+      const li = document.getElementById("r-" + id);          // leave a row alone while it plays or is being edited
+      if (li && !li.querySelector(".editor") && li.querySelector("audio").paused) li.replaceWith(row(l));
+    }
+    progress(); setState(snap.empty ? "Nothing checked yet" : "All answers saved");
+  }, () => setState("Saved answers couldn't be loaded. Reload the page to try again."));
+})();
+</script>
