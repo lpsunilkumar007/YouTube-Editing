@@ -34,7 +34,8 @@ already delivered and reports what it finds, but changes a delivered video only 
   - **auto:** a lecture with no writing needs `sync.anchors_waived` with a reason.
   - **auto:** the package INDEX says whether the sync was measured or only confirmed by you.
   - **Claude:** picks 10+ anchors from different parts of the lecture (dictated numbers, labels written while said), using `ink --from/--to` and desktop crops. After the render, Claude checks a few anchors in the final video frame by frame (ink 0–1.5 s after the word).
-  - **Anchor on shapes drawn while you name them** ("start kar liya" as the Start oval appears, "input" as the input box appears). Writing done while **reading a slide aloud** does not line up with the words: on Lesson 05 those pairs gave +110.7 s and you saw the pen 2–3 s late; draw-while-naming pairs gave +113.3 s.
+  - Prefer **dictated** pairs: a number or word written while you say it. On Lesson 05, shapes drawn while naming them gave +113.3 s, but in an A/B comparison you chose +110.7 s from the dictated pairs. When the pairs disagree, don't guess.
+  - **Ask for an A/B check:** render the same 20 s at both offsets and let you choose.
   - Your viewing is the final check: if the pen still looks late or early, the anchors are wrong, not your eyes.
   - Pen-tap audio, hand motion (gestures swamp the writing) and automatic numeral matching were tried and are **not reliable**.
 - **You:** an OBS mic track would make this automatic (audio cross-correlation).
