@@ -96,7 +96,10 @@ def split_sections(segs, secs):
     full-timeline segment), so camera crops and takes still come from the unsplit timeline."""
     out = []
     for i, s in enumerate(segs):
-        if s["layout"] == "A": out.append(dict(s, parent=s.get("parent", i))); continue      # camera only: no desktop
+        if s["layout"] == "A":                       # camera only: not split, but tagged for the Shorts, whose split
+            p = dict(s, parent=s.get("parent", i))   # screen shows the desktop there too
+            o = next((o for x, y, o in secs if x <= s["face_in"] and s["face_out"] <= y), None)
+            out.append(dict(p, desk_offset=o) if o is not None else p); continue
         cuts = sorted({s["face_in"], s["face_out"], *(t for a, b, _ in secs for t in (a, b) if s["face_in"] < t < s["face_out"])})
         for a, b in zip(cuts, cuts[1:]):
             p = dict(s, face_in=a, face_out=b, parent=s.get("parent", i))
