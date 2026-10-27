@@ -122,7 +122,7 @@ def screens(cfg, analysis, edl, out_dir):
         shown = [(max(a, s["face_in"]), min(b, s["face_out"]), s) for s in edl["segments"] if s["layout"] != "A" and min(b, s["face_out"]) - max(a, s["face_in"]) > 0.5]
         if not shown: continue
         lo, hi, s = shown[-1]; F = hi - 0.3; f = f"slide_{n:02d}.png"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{F + off:.3f}", "-i", cfg["sources"]["desktop_recording"], "-frames:v", "1",
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{F + s.get('desk_offset', off):.3f}", "-i", cfg["sources"]["desktop_recording"], "-frames:v", "1",
                         "-vf", f"crop={w}:{h}:{x}:{y}", os.path.join(out_dir, f)], check=True)
         out.append({"file": f, "face_time": round(F, 2), "final_time": round(s["edit_start"] + F - s["face_in"], 2)})
     json.dump(out, open(idx, "w", encoding="utf-8"), indent=1)

@@ -79,7 +79,7 @@ def tight(png):
     return out, box[0], box[1]
 
 def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, badges=(), elements=(), focus=None):
-    """seg = {layout, face_in, face_out, zoom?}. bar = (mov, start_face_time). badges = [(png, x, y, t0, t1)] local times.
+    """seg = {layout, face_in, face_out, zoom?, desk_offset?} (desk_offset: a sync section's own offset). bar = (mov, start_face_time). badges = [(png, x, y, t0, t1)] local times.
     elements = [(mov, local_offset)]. Returns the ffmpeg command (also executed)."""
     fps = cfg["output"]["fps"]; W, H = g["W"], g["H"]; a, b = seg["face_in"], seg["face_out"]; T = round(b - a, 6)
     face = cfg["sources"]["face_camera"]; desk = cfg["sources"]["desktop_recording"]
@@ -91,7 +91,7 @@ def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, bad
     else:
         d = g["camera"][2]; cx, cy, cw, ch = g["card"]
         (rg, rx, ry), (sh, hx, hy), (rc, qx, qy) = (tight(layers[k]) for k in ("card_ring", "cam_shadow", "cam_ring"))
-        inputs += ["-ss", f"{a + offset:.4f}", "-t", f"{T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
+        inputs += ["-ss", f"{a + seg.get('desk_offset', offset):.4f}", "-t", f"{T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
                    *loop(layers["cam_mask"]), *loop(rg), *loop(sh), *loop(rc)]
         fc = (f"[0:v]setpts=PTS-STARTPTS,fps={fps},{face_filter(cfg, pipeline, d, d, crop, 'yuv444p')},setsar=1,format=yuva444p[c0];"
               f"[4:v]format=gray,setsar=1[cmk];[c0][cmk]alphamerge[cam];"
