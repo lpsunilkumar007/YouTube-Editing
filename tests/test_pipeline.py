@@ -100,3 +100,11 @@ def test_short_must_not_start_inside_a_spoken_word():
     words = [(2.9, 3.45, "hai"), (3.7, 4.0, "jab")]
     assert shorts_v3.clip_problems(3.35, 9.0, words, [], env)[0]           # starts on the tail of 'hai'
     assert not shorts_v3.clip_problems(3.6, 9.0, words, [], env)[0]        # starts in the pause
+
+def test_edit_starts_at_the_voice_not_the_first_heard_word():
+    """lesson05: 'Hello programmers…' from 6.6 s, but the recognizer's first word was at 9.45 s."""
+    import numpy as np
+    from ytpipe import timeline
+    env = np.full(1200, -62.0); env[660:1060] = -24.0; env[1120:] = -25.0
+    assert abs(timeline.voice_onset(env, 9.45, -35.0) - 6.45) < 0.02
+    assert timeline.voice_onset(env, 11.3, -35.0) == 11.05                 # pause before 11.2 s: starts 0.15 s ahead of the voice

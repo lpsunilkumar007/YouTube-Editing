@@ -122,6 +122,18 @@ def zoom_candidates(shots, ink_face, area, min_ink=3):
         if (x1 - x0) < 0.6 * area[2]: out.append({"shot": i, "ink_bbox": [x0, y0, x1, y1], "status": "candidate: run clearance check"})
     return out
 
+def voice_onset(env, t, loud, back=5.0, gap=0.3, step=0.01):
+    """The recognizer can miss the first words (lesson05: 'Hello programmers…' from 6.6 s, first word heard at 9.45 s).
+    Walk back from t while the narration stays loud (gaps up to `gap` s), at most `back` s: the edit starts at the voice."""
+    k = int(t / step); stop = max(0, int((t - back) / step)); quiet = 0; first = k
+    while k > stop:
+        k -= 1
+        if env[k] > loud: first, quiet = k, 0
+        else:
+            quiet += 1
+            if quiet * step > gap: break
+    return round(min(t, first * step - 0.15), 2)
+
 def propose(cfg, analysis, lines, offset, out_json, removals=()):
     fps = cfg["output"]["fps"]; pauses = [tuple(p) for p in analysis["pauses"]]
     env = np.load(os.path.join(cfg["paths"]["analysis"], "speech_env.npy")); sp = np.nonzero(env > cfg["editing"]["speech_threshold_dbfs"])[0]
@@ -130,6 +142,7 @@ def propose(cfg, analysis, lines, offset, out_json, removals=()):
     if os.path.exists(wj):
         ws = [w for s in json.load(open(wj, encoding="utf-8"))["segments"] for w in s.get("words", []) if w[1] - w[0] >= 0.06]
         if ws: start, end = max(start, ws[0][0]), min(end, ws[-1][1])
+    start = voice_onset(env, start, cfg["editing"]["speech_threshold_dbfs"] + 15)
     sc = [t - offset for t in analysis["slide_changes"]]
     ink = [dict(e, start=e["start"] - offset, end=e["end"] - offset) for e in analysis["ink"]]
     writing = [(e["start"] - 0.3, e["end"] + 0.3) for e in ink if start < e["start"] < end]
