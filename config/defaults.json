@@ -102,6 +102,10 @@
   },
   "captions": {
     "enabled": true,
+    "phrases": {
+      "_help": "Fixed wording in captions (canonical: [regex variants]); the user's rule 2026-10-27: the greeting is always 'Hello programmers'.",
+      "Hello programmers": ["hello,? programmer(?!s)"]
+    },
     "format": [
       "srt"
     ],
