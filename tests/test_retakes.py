@@ -73,3 +73,9 @@ def test_rerun_keeps_hand_added_cuts(tmp_path):
     json.dump([hand], open(os.path.join(P["timelines"], "content_cuts.json"), "w"))
     cuts, *_ = retakes.run(cfg, {"segments": [{"words": [[0.0, 0.4, "hello"], [0.5, 0.9, "there"]]}]})
     assert [c["reason"] for c in cuts] == ["fact correction"]
+
+def test_a_looping_recognizer_counts_as_missed_speech():
+    import numpy as np
+    W = [(0.0, 0.4, "a")] + [(1.0 + k * 0.3, 1.2 + k * 0.3, "aapka") for k in range(30)] + [(12.0, 12.4, "b")]
+    env = np.full(1300, -25.0)
+    assert retakes.untranscribed(W, env, -50.0) == [[0.4, 12.0]]

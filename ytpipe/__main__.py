@@ -69,6 +69,9 @@ def main(argv=None):
     meta = lambda: _j(os.path.join(A, "metadata.json"))
     an = lambda: _j(os.path.join(A, "analysis.json"))
     off = lambda: _j(os.path.join(A, "sync.json"))["result"]["offset_s"]
+    def _markers():                                        # chapter markers: their own file, else the timeline's chapters
+        cm = os.path.join(P["timelines"], "chapter_markers.json")
+        return _j(cm)["markers"] if os.path.exists(cm) else _j(os.path.join(P["timelines"], "timeline.json"))["chapters"]
     edl = lambda: _j(os.path.join(P["timelines"], "edl.json"))
     s = a.stage
     if s == "init":
@@ -142,7 +145,7 @@ def main(argv=None):
         for x in probs[:15]: print("  -", x)
     elif s == "metadata":
         _require_factcheck(cfg, P, "metadata")
-        E = edl(); ch = metadata.chapters(_j(os.path.join(P["timelines"], "chapter_markers.json"))["markers"], E["segments"], E["duration"])
+        E = edl(); ch = metadata.chapters(_markers(), E["segments"], E["duration"])
         metadata.content_brief(transcript.parse(os.path.join(P["transcripts"], "transcript.txt")), E["segments"], ch, os.path.join(P["metadata"], "content_brief.md"))
         inp = os.path.join(P["metadata"], "description_input.json")
         if not os.path.exists(inp): sys.exit(f"content brief written; now write {inp} (titles, description parts, tags) and rerun")
@@ -192,7 +195,7 @@ def main(argv=None):
             print(os.path.basename(r["file"]), r["layout"], "frame", r["frame_t"], "QA:", r["qa"] or "pass")
         print("choose one, then: python -m ytpipe approve thumbnail --note option_N")
     elif s == "shorts":
-        E = edl(); ch = metadata.chapters(_j(os.path.join(P["timelines"], "chapter_markers.json"))["markers"], E["segments"], E["duration"])
+        E = edl(); ch = metadata.chapters(_markers(), E["segments"], E["duration"])
         terms = [k for k in _j(os.path.join(config.ROOT, cfg["captions"]["glossary"])) if not k.startswith("_")]
         c = shorts.candidates(cfg, transcript.parse(os.path.join(P["transcripts"], "transcript.txt")), E["segments"], terms, ch)
         json.dump(c, open(os.path.join(P["shorts"], "candidates.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)

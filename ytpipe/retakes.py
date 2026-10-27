@@ -102,10 +102,16 @@ def detect(asr, strong=STRONG, weak=WEAK, pause=PAUSE, resume=RESUME, pauses=Non
     return merged
 
 def untranscribed(W, env, thr=-45.0, min_s=3.0, step=0.01, active=0.4):
-    """Gaps between transcribed words where the narration level says someone is talking (>= `active` of the gap above
+    """Gaps between transcribed words (looped repeats removed) where the narration level says someone is talking (>= `active` of the gap above
     `thr` dBFS) for >= min_s: the recognizer dropped speech there. A fumble or a spoken cut instruction can hide in such a
     gap (lesson04: 8 s at 590 s), so each one is re-transcribed and reviewed before the cuts are final."""
-    out = []                                     # a word "lasting" seconds is the recognizer stretching over lost speech
+    keep, i = [], 0                              # a word repeated 4+ times in a row is the recognizer looping (lesson05: 'आपका' x40)
+    while i < len(W):
+        j = i
+        while j + 1 < len(W) and W[j + 1][2] == W[i][2]: j += 1
+        if j - i + 1 < 4: keep += W[i:j + 1]
+        i = j + 1
+    W = keep; out = []                           # a word "lasting" seconds is the recognizer stretching over lost speech
     for (a, b) in zip([min(w[1], w[0] + 1.2) for w in W[:-1]], [w[0] for w in W[1:]]):
         if b - a < min_s: continue
         seg = env[int(a / step):int(b / step)]
