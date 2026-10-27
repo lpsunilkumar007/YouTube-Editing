@@ -44,7 +44,7 @@ def frame_timing(video, edl, desktop, offset, ink_events_desktop, g, tol_frames=
     sx, sy, sw, sh = g["slide_area"]; cx, cy, cw, ch = g["card"]; out = []; n = 0
     moments = [e["start"] + 0.5 * (e["end"] - e["start"]) for e in ink_events_desktop]
     for D in moments:
-        seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + 0.3 <= D - s.get("desk_offset", offset) <= s["face_out"] - 0.3), None)
+        seg = next((s for s in edl if s["layout"] == "B" and "desk_hold" not in s and s["face_in"] + 0.3 <= D - s.get("desk_offset", offset) <= s["face_out"] - 0.3), None)
         if not seg or n >= max_checks: continue
         F = D - seg.get("desk_offset", offset)
         t = seg["edit_start"] + F - seg["face_in"]
@@ -71,7 +71,7 @@ def slide_timing(video, edl, desktop, offset, changes_desktop, g, tol_frames=1, 
     -> {"checked", "lags"}; a change that is not one clear step in both (two changes close together) is not counted."""
     out = []; n = 0
     for D in changes_desktop:
-        seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + win + 0.1 <= D - s.get("desk_offset", offset) <= s["face_out"] - win - 0.1), None)
+        seg = next((s for s in edl if s["layout"] == "B" and "desk_hold" not in s and s["face_in"] + win + 0.1 <= D - s.get("desk_offset", offset) <= s["face_out"] - win - 0.1), None)
         if not seg: continue
         F = D - seg.get("desk_offset", offset)
         t = seg["edit_start"] + F - seg["face_in"]

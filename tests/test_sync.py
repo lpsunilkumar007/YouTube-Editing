@@ -31,3 +31,7 @@ def test_sync_sections_split_segments_and_carry_their_offset():
     assert sync.desk_offset(out, 70.0, 110.7) == 34.5 and sync.desk_offset(out, 200.0, 110.7) == 110.7
     assert sync.split_sections(segs, []) == [dict(s, parent=i) for i, s in enumerate(segs)]
     assert sync.split_sections(segs, [(0.0, 62.0, 27.4)])[0]["desk_offset"] == 27.4      # a camera shot inside a section
+
+def test_hold_section_pauses_the_desktop_on_one_frame():
+    out = sync.split_sections([{"layout": "B", "face_in": 250.0, "face_out": 315.5}], [(239.0, 278.2, 114.1), (278.2, 400.0, None, 392.3)])
+    assert [(s["face_in"], s.get("desk_hold"), s["desk_offset"]) for s in out] == [(250.0, None, 114.1), (278.2, 392.3, 114.1)]

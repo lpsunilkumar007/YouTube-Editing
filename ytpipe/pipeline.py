@@ -90,7 +90,7 @@ def build(cfg, plan, analysis, meta, out_mp4, only=None, gate="full_render", wd=
                     os.path.join(wd, "mix.wav"), os.path.join(wd, "narration_stem.wav"))
     audio.mux(joined, os.path.join(wd, "mix.wav"), out_mp4, cfg)
     edl = [{"layout": s["layout"], "face_in": s["face_in"], "face_out": s["face_out"], "edit_start": t, "frames": n,
-            **({"desk_offset": s["desk_offset"]} if "desk_offset" in s else {})} for s, t, n in zip(segs, starts, nfr)]
+            **{k: s[k] for k in ("desk_offset", "desk_hold") if k in s}} for s, t, n in zip(segs, starts, nfr)]
     if record: json.dump(g, open(os.path.join(A["timelines"], "geometry.json"), "w"), indent=1)
     if record: json.dump({"offset_s": off, "fps": cfg["output"]["fps"], "segments": edl, "duration": sum(nfr) / cfg["output"]["fps"]},
               open(os.path.join(A["timelines"], "edl.json"), "w"), indent=1)

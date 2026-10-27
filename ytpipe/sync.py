@@ -86,10 +86,12 @@ def sections(cfg):
     not follow the one lecture offset (lesson05: the pen ran 27-35 s after the voice for the first two minutes and 110.7 s
     after it from the problem slide on; one offset showed the 'A < B' drawing 50 s before it was explained). Each section
     is measured like the main offset, from its own pen/word pairs, and needs no new ink inside the window a border
-    repeats or skips."""
+    repeats or skips. A section with hold_desk instead of offset pauses the desktop on that frame (lesson05: the screen
+    stops while AND is explained, so the next flowchart steps are not drawn under an unrelated explanation)."""
     aj = os.path.join(cfg["paths"]["timelines"], "sync_anchors.json")
     if not os.path.exists(aj): return []
-    return [(float(x["face_from"]), float(x["face_to"]), float(x["offset"])) for x in json.load(open(aj, encoding="utf-8")).get("sections", [])]
+    return [(float(x["face_from"]), float(x["face_to"]), float(x["offset"]) if "offset" in x else None,
+             *([float(x["hold_desk"])] if "hold_desk" in x else [])) for x in json.load(open(aj, encoding="utf-8")).get("sections", [])]
 
 def split_sections(segs, secs):
     """Segments cut at section borders; the pieces inside a section carry desk_offset. Each piece keeps "parent" (its
@@ -98,13 +100,14 @@ def split_sections(segs, secs):
     for i, s in enumerate(segs):
         if s["layout"] == "A":                       # camera only: not split, but tagged for the Shorts, whose split
             p = dict(s, parent=s.get("parent", i))   # screen shows the desktop there too
-            o = next((o for x, y, o in secs if x <= s["face_in"] and s["face_out"] <= y), None)
+            o = next((q[2] for q in secs if q[0] <= s["face_in"] and s["face_out"] <= q[1] and q[2] is not None), None)
             out.append(dict(p, desk_offset=o) if o is not None else p); continue
-        cuts = sorted({s["face_in"], s["face_out"], *(t for a, b, _ in secs for t in (a, b) if s["face_in"] < t < s["face_out"])})
+        cuts = sorted({s["face_in"], s["face_out"], *(t for q in secs for t in q[:2] if s["face_in"] < t < s["face_out"])})
         for a, b in zip(cuts, cuts[1:]):
             p = dict(s, face_in=a, face_out=b, parent=s.get("parent", i))
-            o = next((o for x, y, o in secs if x <= a and b <= y), None)
-            if o is not None: p["desk_offset"] = o
+            q = next((q for q in secs if q[0] <= a and b <= q[1]), None)
+            if q and len(q) > 3: p.update(desk_hold=q[3], desk_offset=round(q[3] - a, 4))   # offset: the held frame, for QA/Shorts
+            elif q: p["desk_offset"] = q[2]
             out.append(p)
     return out
 
