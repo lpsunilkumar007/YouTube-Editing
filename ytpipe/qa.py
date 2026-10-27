@@ -44,8 +44,9 @@ def frame_timing(video, edl, desktop, offset, ink_events_desktop, g, tol_frames=
     sx, sy, sw, sh = g["slide_area"]; cx, cy, cw, ch = g["card"]; out = []; n = 0
     moments = [e["start"] + 0.5 * (e["end"] - e["start"]) for e in ink_events_desktop]
     for D in moments:
-        F = D - offset; seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + 0.3 <= F <= s["face_out"] - 0.3), None)
+        seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + 0.3 <= D - s.get("desk_offset", offset) <= s["face_out"] - 0.3), None)
         if not seg or n >= max_checks: continue
+        F = D - seg.get("desk_offset", offset)
         t = seg["edit_start"] + F - seg["face_in"]
         fin = media.frames(video, t, 1.1 / fps, 480, 270, fps, vf_pre=f"crop={cw}:{ch}:{cx}:{cy}", pix="rgb24")[0].astype(np.int16)
         seq = media.frames(desktop, D - 6 / fps, 13 / fps, 480, 270, fps, vf_pre=f"crop={sw}:{sh}:{sx}:{sy}", pix="rgb24").astype(np.int16)
@@ -70,8 +71,9 @@ def slide_timing(video, edl, desktop, offset, changes_desktop, g, tol_frames=1, 
     -> {"checked", "lags"}; a change that is not one clear step in both (two changes close together) is not counted."""
     out = []; n = 0
     for D in changes_desktop:
-        F = D - offset; seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + win + 0.1 <= F <= s["face_out"] - win - 0.1), None)
+        seg = next((s for s in edl if s["layout"] == "B" and s["face_in"] + win + 0.1 <= D - s.get("desk_offset", offset) <= s["face_out"] - win - 0.1), None)
         if not seg: continue
+        F = D - seg.get("desk_offset", offset)
         t = seg["edit_start"] + F - seg["face_in"]
         grab = lambda path, t0, box: media.frames(path, t0, 2 * win, 480, 270, fps, vf_pre="crop={2}:{3}:{0}:{1}".format(*box)).astype(np.int16)
         kr, kd = _step(grab(video, t - win, g["card"])), _step(grab(desktop, D - win, g["slide_area"]))
@@ -177,7 +179,7 @@ def blank_shown(edl, blanks, offset):
     f = []
     for b0, b1 in blanks:
         for x in edl:
-            a, b = max(x["face_in"], b0 - offset), min(x["face_out"], b1 - offset)
+            o = x.get("desk_offset", offset); a, b = max(x["face_in"], b0 - o), min(x["face_out"], b1 - o)
             if x["layout"] != "A" and b > a:
                 t = x["edit_start"] + a - x["face_in"]
                 f.append(f"blank desktop ('End of slide show' or slides flashed around it) shown at {int(t // 60)}:{t % 60:04.1f} for {b - a:.1f} s")

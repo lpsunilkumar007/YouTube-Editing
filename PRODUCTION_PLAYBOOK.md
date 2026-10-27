@@ -118,6 +118,15 @@ already delivered and reports what it finds, but changes a delivered video only 
 - **Claude:** re-hears the first seconds and puts the greeting in the transcript.
 - **auto (your rule):** the greeting is always written **"Hello programmers"** (plural) in transcripts and captions, even when the recognizer hears "Hello programmer" (`captions.phrases` in `config/defaults.json`).
 
+### C17. The pen is right in one part of the video and wrong in another
+- **Seen:** Lesson 05: +110.7 s was right from the problem slide on, but before it the pen ran only 27–35 s after the voice. The "A < B" drawing showed at 0:14, while it was explained at 1:02.
+- **Claude:**
+  - checks anchors from **every** part of the lecture (early slides too), not only one stretch
+  - when parts disagree, adds `sections` to `timelines/sync_anchors.json`: `{face_from, face_to, offset, evidence}`, each measured from its own pen/word pairs (ink after its word)
+  - places each border where the desktop shows no new ink in the stretch it repeats or skips, so the jump can't be seen
+  - holds on a finished slide rather than show ink that is explained later
+- **auto:** the render, Shorts, QA and blog stills use each section's offset (`sync.split_sections`, `desk_offset` in `edl.json`).
+
 ### C15. Re-renders
 - **Claude:**
   - never overwrites a final: the previous one is renamed with a suffix that says why (`_v3_pen_late`)

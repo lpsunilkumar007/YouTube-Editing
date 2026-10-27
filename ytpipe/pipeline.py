@@ -5,7 +5,7 @@ timeline.json (approved) -> geometry + static layers -> fixed crop per continuou
 -> narration on frames + music + SFX -> mux -> QA. Restartable: finished segments are reused unless their inputs changed."""
 import json, os
 import numpy as np
-from . import layout, render, graphics, audio, state, media
+from . import layout, render, graphics, audio, state, media, sync
 
 def _takes(segs):
     groups, cur = [], None
@@ -45,10 +45,12 @@ def build(cfg, plan, analysis, meta, out_mp4, only=None, gate="full_render", wd=
     masks = list(np.load(os.path.join(A["analysis"], "content_masks.npz")).values())
     g = layout.geometry(cfg, analysis["slide_area"], masks, analysis.get("counter_box")); L = layout.static_layers(cfg, g, os.path.join(wd, "layers"))
     off = plan["offset_s"]; segs = plan["segments"]; ft = None
+    base = plan.get("parent_segments", segs); secs = sync.sections(cfg)
+    if secs: segs = sync.split_sections(segs, secs)
     if os.path.exists(os.path.join(A["analysis"], "face_track.npy")): ft = np.load(os.path.join(A["analysis"], "face_track.npy"))
     v = meta["face_camera"]["video"]; sw, sh = v["width"], v["height"]
     if abs(v.get("rotation") or 0) == 90: sw, sh = sh, sw                         # crops are in displayed (rotated) pixels
-    base = plan.get("parent_segments", segs); bc = {}
+    bc = {}
     for grp in _takes(base):
         c = render.fixed_crop(cfg, ft, base[grp[0]]["face_in"], base[grp[-1]]["face_out"], sw, sh)
         for i in grp: bc[i] = c
@@ -81,14 +83,14 @@ def build(cfg, plan, analysis, meta, out_mp4, only=None, gate="full_render", wd=
     starts = list(np.concatenate([[0], np.cumsum(nfr)[:-1]]) / cfg["output"]["fps"])
     music = plan.get("music")
     if music is None and str(plan.get("music_sections", "")).startswith("auto") and cfg["audio"]["music"]["enabled"]:
-        music = audio.to_edit(audio.music_plan(cfg, plan.get("parent_segments", segs), plan.get("chapters", []), analysis.get("pauses", [])),
+        music = audio.to_edit(audio.music_plan(cfg, base, plan.get("chapters", []), analysis.get("pauses", [])),
                               [(s["face_in"], s["face_out"], t) for s, t in zip(segs, starts)])
     json.dump([[a, b] for a, b, *_ in (music or [])], open(os.path.join(wd, "music_plan.json"), "w"))   # for the music QA
     res = audio.mix(cfg, [(s["face_in"], n) for s, n in zip(segs, nfr)], music or [], plan.get("sfx", []),
                     os.path.join(wd, "mix.wav"), os.path.join(wd, "narration_stem.wav"))
     audio.mux(joined, os.path.join(wd, "mix.wav"), out_mp4, cfg)
-    edl = [{"layout": s["layout"], "face_in": s["face_in"], "face_out": s["face_out"], "edit_start": t, "frames": n}
-           for s, t, n in zip(segs, starts, nfr)]
+    edl = [{"layout": s["layout"], "face_in": s["face_in"], "face_out": s["face_out"], "edit_start": t, "frames": n,
+            **({"desk_offset": s["desk_offset"]} if "desk_offset" in s else {})} for s, t, n in zip(segs, starts, nfr)]
     if record: json.dump(g, open(os.path.join(A["timelines"], "geometry.json"), "w"), indent=1)
     if record: json.dump({"offset_s": off, "fps": cfg["output"]["fps"], "segments": edl, "duration": sum(nfr) / cfg["output"]["fps"]},
               open(os.path.join(A["timelines"], "edl.json"), "w"), indent=1)

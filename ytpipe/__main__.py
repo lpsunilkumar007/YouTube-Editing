@@ -228,7 +228,9 @@ def main(argv=None):
                                                     np.load(os.path.join(A, "speech_env.npy")), cfg["editing"]["speech_threshold_dbfs"])
                 for w_ in warn: print(f"clip {k}: note: {w_}")
                 if bad and not a.force: sys.exit(f"clip {k}: " + "; ".join(bad) + " (fix candidates_curated.json, or --force)")
-            ink = shorts_v3.ink_runs(cfg["sources"]["desktop_recording"], F0 + off_, F1 + off_, off_)
+            ink, bs_ = [], sorted({F0, F1, *(t for g in E["segments"] for t in (g["face_in"], g["face_out"]) if F0 < t < F1)})
+            for a_, b_ in zip(bs_, bs_[1:]):                   # sync sections: each stretch with its own desktop offset
+                o_ = sync.desk_offset(E["segments"], a_, off_); ink += shorts_v3.ink_runs(cfg["sources"]["desktop_recording"], a_ + o_, b_ + o_, o_)
             parts = shorts_v3.plan(F0, F1, [l["face"] for l in lines if F0 <= l["face"] <= F1], env, ink)
             pipe = meta()["face_color_pipeline"] if os.path.exists(os.path.join(A, "metadata.json")) else "libplacebo"
             if a.style == "v4":                              # approved 2026-10-22: tightened pauses, 2-4 word captions, music, guided split
@@ -237,15 +239,16 @@ def main(argv=None):
                 bpm = a.bpm or V4.get("music_bpm"); mdb = a.music_db if a.music_db is not None else V4.get("music_db_under_voice", 20.0)
                 crops, gparts, glog = {}, [], []
                 for f0_, f1_, l_ in parts:                   # A parts: the desktop follows what is being explained
+                    o_ = sync.desk_offset(E["segments"], f0_, off_)
                     if l_ == "C" and V4.get("guided_split", {}).get("enabled", True):   # desktop focus: widened so no word is cut at an edge
-                        fr_ = shorts_focus.ocr(cfg["sources"]["desktop_recording"], [round(f0_ + off_ + 0.2, 2), round(f1_ + off_ - 0.2, 2)], os.path.join(P["shorts"], "ocr_cache.json"))
-                        c0 = shorts_v3.focus_crop(cfg["sources"]["desktop_recording"], f0_ + off_, f1_ + off_, area, 1080 / 1260) or shorts_v2.content_crop(cfg["sources"]["desktop_recording"], f0_ + off_, f1_ + off_, area, cb, aspect=1080 / 1260, min_w=700)
+                        fr_ = shorts_focus.ocr(cfg["sources"]["desktop_recording"], [round(f0_ + o_ + 0.2, 2), round(f1_ + o_ - 0.2, 2)], os.path.join(P["shorts"], "ocr_cache.json"))
+                        c0 = shorts_v3.focus_crop(cfg["sources"]["desktop_recording"], f0_ + o_, f1_ + o_, area, 1080 / 1260) or shorts_v2.content_crop(cfg["sources"]["desktop_recording"], f0_ + o_, f1_ + o_, area, cb, aspect=1080 / 1260, min_w=700)
                         crops[(f0_, f1_)] = {"desk": shorts_focus.unclip(c0, area, 1080 / 1260, shorts_focus.text_boxes(cfg["sources"]["desktop_recording"], list(fr_), os.path.join(P["shorts"], "ocr_cache.json"), area), 700,
-                                                                         shorts_focus.ink_box(cfg["sources"]["desktop_recording"], f0_ + off_, f1_ + off_))}
+                                                                         shorts_focus.ink_box(cfg["sources"]["desktop_recording"], f0_ + o_, f1_ + o_))}
                     if l_ != "A" or not V4.get("guided_split", {}).get("enabled", True): gparts.append((f0_, f1_, l_)); continue
-                    ov = shorts_v2.content_crop(cfg["sources"]["desktop_recording"], f0_ + off_, f1_ + off_, area, cb, aspect=1080 / 900, min_w=900)
+                    ov = shorts_v2.content_crop(cfg["sources"]["desktop_recording"], f0_ + o_, f1_ + o_, area, cb, aspect=1080 / 900, min_w=900)
                     for s0, s1, c_ in shorts_focus.guided(f0_, f1_, [l["face"] for l in lines], [l["text"] for l in lines], cfg["sources"]["desktop_recording"],
-                                                          off_, area, 1080 / 900, shorts_v3.pauses(env, f0_, f1_), ov, os.path.join(P["shorts"], "ocr_cache.json"),
+                                                          o_, area, 1080 / 900, shorts_v3.pauses(env, f0_, f1_), ov, os.path.join(P["shorts"], "ocr_cache.json"),
                                                           V4.get("guided_split", {}).get("min_shot_s", 4.0), glog):
                         gparts.append((s0, s1, "A")); crops[(s0, s1)] = {"desk": c_, "parent": (f0_, f1_)}
                 parts = gparts

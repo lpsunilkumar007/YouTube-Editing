@@ -12,7 +12,7 @@ Captions: Hinglish SRT cues of the span, glossary terms highlighted in lime; pos
 or the desktop, above the Shorts/Reels interface zone (bottom ~23 %, right 190 px)."""
 import json, os, re
 import numpy as np
-from . import media, render as R
+from . import media, sync, render as R
 from .shorts_v2 import content_crop, _esc
 
 W, H, FPS = 1080, 1920, 30
@@ -242,8 +242,9 @@ def render(cfg, final, cues, parts, offset, ft, pipeline, out, glossary_terms, e
         if ft is not None:
             ft = ft.copy(); ft[:, 1] = (ft[:, 1] * sw / 1920 - wc[0]) / fs; ft[:, 3] = ft[:, 3] * sw / 1920 / fs
         src = lambda c: [wc[0] + c[0] * fs, c[1] * fs, c[2] * fs, c[3] * fs]
-    e0 = edit_time(parts[0][0]); pieces = pieces_of(parts, segments, cut_out)
+    e0 = edit_time(parts[0][0]); pieces = pieces_of(parts, segments, cut_out); off0 = offset
     for k, (f0, f1, lay, P0, P1) in enumerate(pieces):
+        offset = sync.desk_offset(segments, f0, off0)                      # sync sections: the segment's own offset
         T = round((f1 - f0) * FPS) / FPS; po = os.path.join(d, f"p{k}.mp4"); ass = po.replace(".mp4", ".ass")
         ea = edit_time(f0) - e0; _ass([(a - e0 - ea, b - e0 - ea, t) for a, b, t in cues if b - e0 > ea and a - e0 < ea + T], ass, lay, glossary_terms, style=cap_style)
         base = ["ffmpeg", "-v", "error", "-y", *hw, "-ss", f"{f0:.4f}", "-t", f"{T:.4f}", "-i", face]

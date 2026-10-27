@@ -81,6 +81,34 @@ def anchor_offset(anchors, min_n=5, max_lag=2.0):
         r.update(status="needs_input", reason=f"anchors disagree: ink {lags[-1]} s after its word at the largest; check the pairs")
     return r
 
+def sections(cfg):
+    """Sync sections from timelines/sync_anchors.json: [(face_from, face_to, offset)] for stretches where the desktop does
+    not follow the one lecture offset (lesson05: the pen ran 27-35 s after the voice for the first two minutes and 110.7 s
+    after it from the problem slide on; one offset showed the 'A < B' drawing 50 s before it was explained). Each section
+    is measured like the main offset, from its own pen/word pairs, and needs no new ink inside the window a border
+    repeats or skips."""
+    aj = os.path.join(cfg["paths"]["timelines"], "sync_anchors.json")
+    if not os.path.exists(aj): return []
+    return [(float(x["face_from"]), float(x["face_to"]), float(x["offset"])) for x in json.load(open(aj, encoding="utf-8")).get("sections", [])]
+
+def split_sections(segs, secs):
+    """Segments cut at section borders; the pieces inside a section carry desk_offset. Each piece keeps "parent" (its
+    full-timeline segment), so camera crops and takes still come from the unsplit timeline."""
+    out = []
+    for i, s in enumerate(segs):
+        if s["layout"] == "A": out.append(dict(s, parent=s.get("parent", i))); continue      # camera only: no desktop
+        cuts = sorted({s["face_in"], s["face_out"], *(t for a, b, _ in secs for t in (a, b) if s["face_in"] < t < s["face_out"])})
+        for a, b in zip(cuts, cuts[1:]):
+            p = dict(s, face_in=a, face_out=b, parent=s.get("parent", i))
+            o = next((o for x, y, o in secs if x <= a and b <= y), None)
+            if o is not None: p["desk_offset"] = o
+            out.append(p)
+    return out
+
+def desk_offset(segments, t, offset):
+    """The desktop offset at face time t: the section offset of the segment holding t, else the lecture offset."""
+    return next((s["desk_offset"] for s in segments or () if "desk_offset" in s and s["face_in"] <= t < s["face_out"]), offset)
+
 def run(cfg, meta):
     rep = {"metadata": metadata_estimate(meta), "audio": None, "manual": cfg["sync"]["manual_offset_s"]}
     aj = os.path.join(cfg["paths"]["timelines"], "sync_anchors.json")
