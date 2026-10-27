@@ -34,7 +34,9 @@ already delivered and reports what it finds, but changes a delivered video only 
   - **auto:** a lecture with no writing needs `sync.anchors_waived` with a reason.
   - **auto:** the package INDEX says whether the sync was measured or only confirmed by you.
   - **Claude:** picks 10+ anchors from different parts of the lecture (dictated numbers, labels written while said), using `ink --from/--to` and desktop crops. After the render, Claude checks a few anchors in the final video frame by frame (ink 0–1.5 s after the word).
-  - Pen-tap audio, hand motion and automatic numeral matching were tried and are **not reliable**.
+  - **Anchor on shapes drawn while you name them** ("start kar liya" as the Start oval appears, "input" as the input box appears). Writing done while **reading a slide aloud** does not line up with the words: on Lesson 05 those pairs gave +110.7 s and you saw the pen 2–3 s late; draw-while-naming pairs gave +113.3 s.
+  - Your viewing is the final check: if the pen still looks late or early, the anchors are wrong, not your eyes.
+  - Pen-tap audio, hand motion (gestures swamp the writing) and automatic numeral matching were tried and are **not reliable**.
 - **You:** an OBS mic track would make this automatic (audio cross-correlation).
 
 ### C2. A spoken instruction ("in sab ko cut kar dena", "pause here, editor…") is still in the video
@@ -108,6 +110,11 @@ already delivered and reports what it finds, but changes a delivered video only 
   - `package` clears stale copies
   - INDEX shows the fact-check and sync status
   - the blog cover is the approved thumbnail
+
+### C16. The greeting is cut off at the start
+- **Seen:** Lesson 05 started at 9.1 s, after "Hello programmers, welcome back to the series" (6.6 s); the recognizer missed those words. Lesson 04 also lost "Hello programmer, welcome back to another video".
+- **auto:** the edit starts where your voice starts (`timeline.voice_onset`), not at the first transcribed word.
+- **Claude:** re-hears the first seconds and puts the greeting in the transcript.
 
 ### C15. Re-renders
 - **Claude:**
