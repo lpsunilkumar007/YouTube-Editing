@@ -81,3 +81,12 @@ def test_blog_lists_the_lessons_shorts(tmp_path):
     inp.update(video_url="https://youtu.be/abcdefghijk", shorts_urls=["https://youtube.com/shorts/AAAAAAAAAAA", "https://youtube.com/shorts/BBBBBBBBBBB"])
     r = blog.build(cfg, inp); h = (tmp_path / "blog" / "how-to-start-programming.html").read_text()
     assert '<a href="https://youtube.com/shorts/AAAAAAAAAAA">Start Here</a>' in h and "t=104s\">1:44</a>" in h and not any("shorts_urls" in m for m in r["todo"])
+
+def test_caption_greeting_is_always_hello_programmers(tmp_path):
+    """User rule 2026-10-27: captions say 'Hello programmers' even when the transcript (or ASR) has the singular."""
+    import re
+    from ytpipe import captions
+    cfg = make_cfg(tmp_path)
+    ph = [(c, re.compile(r"(?<!\w)(?:" + "|".join(v) + r")(?!\w)", re.I)) for c, v in cfg["captions"]["phrases"].items() if not c.startswith("_")]
+    assert captions.normalise("Hello programmer, welcome back", [], ph) == "Hello programmers, welcome back"
+    assert captions.normalise("Hello programmers, welcome back", [], ph) == "Hello programmers, welcome back"

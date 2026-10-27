@@ -115,6 +115,7 @@ already delivered and reports what it finds, but changes a delivered video only 
 - **Seen:** Lesson 05 started at 9.1 s, after "Hello programmers, welcome back to the series" (6.6 s); the recognizer missed those words. Lesson 04 also lost "Hello programmer, welcome back to another video".
 - **auto:** the edit starts where your voice starts (`timeline.voice_onset`), not at the first transcribed word.
 - **Claude:** re-hears the first seconds and puts the greeting in the transcript.
+- **auto (your rule):** the greeting is always written **"Hello programmers"** (plural) in transcripts and captions, even when the recognizer hears "Hello programmer" (`captions.phrases` in `config/defaults.json`).
 
 ### C15. Re-renders
 - **Claude:**

@@ -13,7 +13,10 @@ def load_glossary(path):
     return [(canon, re.compile(r"(?<![\w#.])(?:" + "|".join(vs) + r")(?![\w#])", re.I)) for canon, vs in g.items()
             if not canon.startswith("_")]
 
-def normalise(text, glossary):
+def normalise(text, glossary, phrases=()):
+    """phrases: fixed wording (canon, compiled regex) applied first, e.g. the greeting is always 'Hello programmers'."""
+    for canon, rx in phrases:
+        text = rx.sub(canon, text)
     text = re.sub(r"\[unclear[^\]]*\]", "…", text)            # keep the gap visible, never guess words
     text = text.replace("≈", "").replace("[", "").replace("]", "")
     for canon, rx in glossary:
@@ -132,6 +135,7 @@ def write_ass(cues, path, cfg):
 
 def build(cfg, transcript_lines, edl, env=None, step=0.01):
     gl = load_glossary(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), cfg["captions"]["glossary"]))
+    ph = [(c, re.compile(r"(?<!\w)(?:" + "|".join(vs) + r")(?!\w)", re.I)) for c, vs in cfg["captions"].get("phrases", {}).items() if not c.startswith("_")]
     out_dir = cfg["paths"]["transcripts"]; os.makedirs(out_dir, exist_ok=True)
     edit_path = os.path.join(out_dir, "captions_edit.json")
     manual = json.load(open(edit_path, encoding="utf-8")) if os.path.exists(edit_path) else None
@@ -139,7 +143,7 @@ def build(cfg, transcript_lines, edl, env=None, step=0.01):
     lines = transcript_lines
     for i, ln in enumerate(lines):
         end = lines[i + 1]["face"] if i + 1 < len(lines) else ln["face"] + 6
-        txt = normalise(ln["text"], gl)
+        txt = normalise(ln["text"], gl, ph)
         if "translation" in ln["flags"] or re.fullmatch(r"[….\s]*", txt):
             review.append((ln["face"], "NOT captioned (" + ("English rendering, not the spoken words" if "translation" in ln["flags"] else "unclear") + ")", ln["text"])); continue
         if ln["flags"] & {"reconstructed", "unclear"}:
