@@ -61,6 +61,8 @@ def analyse(cfg, spans, pipeline, fps=1.0, out_json=None):
                          "jaw": round(bs["jawOpen"], 3), "smile": round((bs["mouthSmileLeft"] + bs["mouthSmileRight"]) / 2, 3),
                          "brow_up": round(max(bs["browInnerUp"], (bs["browOuterUpLeft"] + bs["browOuterUpRight"]) / 2), 3),
                          "sharp": round(float(cv2.Laplacian(roi, cv2.CV_64F).var()), 1), "light": round(float(roi.mean()), 1)})
+    if not rows:                                   # nothing decoded (e.g. libvulkan not found when DYLD_* is stripped): never cache that
+        raise RuntimeError("face analysis decoded no frames: check that ffmpeg runs (Vulkan/libplacebo, DYLD_FALLBACK_LIBRARY_PATH)")
     if out_json: json.dump(rows, open(out_json, "w"), indent=0)
     return rows
 
