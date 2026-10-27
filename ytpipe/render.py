@@ -79,7 +79,8 @@ def tight(png):
     return out, box[0], box[1]
 
 def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, badges=(), elements=(), focus=None):
-    """seg = {layout, face_in, face_out, zoom?, desk_offset?} (desk_offset: a sync section's own offset). bar = (mov, start_face_time). badges = [(png, x, y, t0, t1)] local times.
+    """seg = {layout, face_in, face_out, zoom?, desk_offset?, desk_hold?} (desk_offset: a sync section's own offset;
+    desk_hold: desktop time of the one frame shown while the desktop is paused). bar = (mov, start_face_time). badges = [(png, x, y, t0, t1)] local times.
     elements = [(mov, local_offset)]. Returns the ffmpeg command (also executed)."""
     fps = cfg["output"]["fps"]; W, H = g["W"], g["H"]; a, b = seg["face_in"], seg["face_out"]; T = round(b - a, 6)
     face = cfg["sources"]["face_camera"]; desk = cfg["sources"]["desktop_recording"]
@@ -91,11 +92,13 @@ def segment(cfg, g, layers, seg, out, offset, pipeline, crop=None, bar=None, bad
     else:
         d = g["camera"][2]; cx, cy, cw, ch = g["card"]
         (rg, rx, ry), (sh, hx, hy), (rc, qx, qy) = (tight(layers[k]) for k in ("card_ring", "cam_shadow", "cam_ring"))
-        inputs += ["-ss", f"{a + seg.get('desk_offset', offset):.4f}", "-t", f"{T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
+        hold = seg.get("desk_hold")                   # a paused desktop: one frame, held for the whole segment
+        inputs += ["-ss", f"{hold if hold is not None else a + seg.get('desk_offset', offset):.4f}", "-t", f"{0.5 if hold is not None else T}", "-i", desk, *loop(layers["bg"]), *loop(layers["card_mask"]),
                    *loop(layers["cam_mask"]), *loop(rg), *loop(sh), *loop(rc)]
         fc = (f"[0:v]setpts=PTS-STARTPTS,fps={fps},{face_filter(cfg, pipeline, d, d, crop, 'yuv444p')},setsar=1,format=yuva444p[c0];"
               f"[4:v]format=gray,setsar=1[cmk];[c0][cmk]alphamerge[cam];"
-              f"[1:v]{desk_filter(g, T, fps, seg.get('zoom'), cfg['zoom']['ease_s'])},format=yuva444p[d0];"
+              f"[1:v]{f'trim=end_frame=1,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={T + 1},' if hold is not None else ''}"
+              f"{desk_filter(g, T, fps, seg.get('zoom'), cfg['zoom']['ease_s'])},format=yuva444p[d0];"
               f"[3:v]format=gray,setsar=1[dmk];[d0][dmk]alphamerge[desk];"
               f"[2:v]{rgb},format=yuv444p,setsar=1[bg];[5:v]{rgb},format=yuva444p,setsar=1[rg];"
               f"[6:v]{rgb},format=yuva444p,setsar=1[sh];[7:v]{rgb},format=yuva444p,setsar=1[rc];"

@@ -126,6 +126,8 @@ already delivered and reports what it finds, but changes a delivered video only 
   - places each border where the desktop shows no new ink in the stretch it repeats or skips, so the jump can't be seen
   - holds on a finished slide rather than show ink that is explained later
 - **auto:** the render, Shorts, QA and blog stills use each section's offset (`sync.split_sections`, `desk_offset` in `edl.json`).
+- **Your rule (2026-10-27):** while you explain something other than what the pen is drawing (lesson05: AND while the pen drew the next flowchart steps), the desktop **pauses**. It resumes when the explanation is over and you go on to the next step. Claude adds a section with `hold_desk` (the desktop frame to hold, after the last stroke that belongs to the earlier step), and resumes with an offset section where the next step starts.
+- **Seen also:** writing that follows its words by up to 15 s, as in lesson05's notes ("80–100 → A" written after the rule is spoken). Small skips at moments when the pen is still bring each note within 1–4 s of its word. Skips are kept small enough that the next step never shows before it is spoken.
 
 ### C15. Re-renders
 - **Claude:**
