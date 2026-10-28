@@ -16,3 +16,22 @@ def test_desktop_analysis(tmp_path):
     gaps = [(b0, a1) for (_, b0), (a1, _) in zip(segs, segs[1:]) if a1 - b0 >= 0.4]
     for g0, g1 in gaps:
         assert any(p0 <= g0 + 0.1 and p1 >= g1 - 0.1 for p0, p1 in a["pauses"]), (g0, g1)
+
+def test_ink_runs_chunked_matches_one_pass(tmp_path):
+    # synthetic desktop: a red stroke grows a little every frame; chunked decoding must give the same glyph events
+    # as one pass (the ink mask is carried across chunk borders), so long --from/--to windows stay within memory
+    import numpy as np
+    from ytpipe import media
+    fps, n = 10, 47
+    def fake(path, ss, t, w, h, f, vf_pre="", pix="gray"):
+        i0, k = int(round(ss * fps)), int(round(t * fps)); fr = np.zeros((k, 1080, 1920, 3), np.uint8)
+        for j in range(k):
+            x = 100 + 20 * (i0 + j); fr[j, 500:510, 100:x, 0] = 220      # red stroke up to x
+        return fr
+    orig = media.frames; media.frames = fake
+    try:
+        one = analyze.ink_runs("x", 0.0, n / fps, chunk_s=100.0)
+        chunked = analyze.ink_runs("x", 0.0, n / fps, chunk_s=1.3)
+    finally:
+        media.frames = orig
+    assert one and chunked == one, (len(one), len(chunked))
