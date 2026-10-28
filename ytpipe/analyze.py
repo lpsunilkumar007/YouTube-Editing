@@ -63,16 +63,23 @@ def blank_spans(fr, fps, area, thr=12, frac=0.9, gap=2.0):
         else: out.append([round(t, 2), round(t + 1 / fps, 2)])
     return out
 
-def ink_runs(path, t0, t1, fps=10, min_px=60, max_w=400):
+def ink_runs(path, t0, t1, fps=10, min_px=60, max_w=400, chunk_s=10.0):
     """New red ink per frame between desktop times t0 and t1 at full resolution -> [(t, pixels, x0, x1, y0, y1)].
     Consecutive frames with a small bbox are one glyph being written; use them to pair glyphs with spoken words
-    (timelines/sync_anchors.json). Slide-wide changes (a new slide, the ink layer redrawn) are skipped."""
-    fr = media.frames(path, t0, t1 - t0, 1920, 1080, fps, pix="rgb24"); red = _red(fr); prev = red[0].copy(); out = []
-    for i, r in enumerate(red[1:], 1):
-        new = r & ~prev; prev |= r
-        if new.sum() > min_px:
-            ys, xs = np.nonzero(new)
-            if xs.max() - xs.min() <= max_w: out.append((round(t0 + i / fps, 1), int(new.sum()), int(xs.min()), int(xs.max()), int(ys.min()), int(ys.max())))
+    (timelines/sync_anchors.json). Slide-wide changes (a new slide, the ink layer redrawn) are skipped.
+    Decoded in chunk_s pieces with the ink mask carried across: full-resolution RGB is ~6 MB a frame, and a 30 s
+    window (1.9 GB at once) silently returned nothing on an 8 GB Mac (lesson05)."""
+    n = int(round((t1 - t0) * fps)); prev = None; out = []; step = max(1, int(round(chunk_s * fps)))
+    for k0 in range(0, n, step):
+        fr = media.frames(path, t0 + k0 / fps, min(step, n - k0) / fps, 1920, 1080, fps, pix="rgb24")
+        for j, r in enumerate(_red(fr)):
+            i = k0 + j
+            if prev is None: prev = r.copy(); continue
+            new = r & ~prev; prev |= r
+            if new.sum() > min_px:
+                ys, xs = np.nonzero(new)
+                if xs.max() - xs.min() <= max_w: out.append((round(t0 + i / fps, 1), int(new.sum()), int(xs.min()), int(xs.max()), int(ys.min()), int(ys.max())))
+        del fr
     return out
 
 def counter_box(path, dur, changes, area, n_off=24, thr=30):
