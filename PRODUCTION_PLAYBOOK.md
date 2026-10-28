@@ -38,6 +38,8 @@ already delivered and reports what it finds, but changes a delivered video only 
   - **Ask for an A/B check:** render the same 20 s at both offsets and let you choose.
   - Your viewing is the final check: if the pen still looks late or early, the anchors are wrong, not your eyes.
   - Pen-tap audio, hand motion (gestures swamp the writing) and automatic numeral matching were tried and are **not reliable**.
+  - **Slide clicks seen on camera** are a good independent check. Your arm leaves the frame to click the next slide, and the desktop changes slide at that moment. Lesson 06: reaches at face 13.1–13.5 and 150.1–153.5 matched slide changes at desk 20.0 and 160.5, so the offset was +6.5 to +7. The dictated pairs then gave +6.38. The same clicks showed that a +4 s guess was wrong: it came from the *second* time "start" was said.
+  - Words said **before** writing ("moisture kitna hai", then writing it 8 s later) are not dictated pairs. Leave them out of the anchors, or the stage stops with "anchors disagree".
 - **You:** an OBS mic track would make this automatic (audio cross-correlation).
 
 ### C2. A spoken instruction ("in sab ko cut kar dena", "pause here, editor…") is still in the video
@@ -52,6 +54,8 @@ already delivered and reports what it finds, but changes a delivered video only 
 - **Seen:** Lesson 04: "operators are plus, minus, divide, multiply…" (4:00), the 17 % 5 example, and "N % 2 = 0 hai, to kya yeh even hai?". A guessed `[…]` there was wrong.
 - **Cause:** the recognizer stretched one word over seconds of speech it lost.
 - **Default:** the same re-hearing as C2. **Claude** adds the lines as `≈` (never as certain), re-runs the fact check and captions, and re-renders any Short whose burned-in captions cover that time.
+- **Seen also (Lesson 06, quiet recording):** the recognizer looped (one line repeated 4×, "ताइजाशाश हैं" for 20 s), and its repair pass returned an **English translation** of Hinglish speech.
+  - **Claude:** re-decodes each looped stretch in 6-second windows, raised 12 dB, in Hindi and in English, **without an initial prompt** (a prompt made Whisper repeat the prompt itself). Hindi output is used where it is clean. English output is only a rendering, so Claude writes those lines in Hinglish as `≈` for the listen-check. Lesson 06: 14 such lines; you corrected 7 of them.
 
 ### C4. Something said in the video is wrong
 - **Default:**
@@ -116,6 +120,7 @@ already delivered and reports what it finds, but changes a delivered video only 
 - **Seen:** Lesson 05 started at 9.1 s, after "Hello programmers, welcome back to the series" (6.6 s); the recognizer missed those words. Lesson 04 also lost "Hello programmer, welcome back to another video".
 - **auto:** the edit starts where your voice starts (`timeline.voice_onset`), not at the first transcribed word.
 - **Claude:** re-hears the first seconds and puts the greeting in the transcript.
+- **Seen also (Lesson 06):** the first greeting ended in "…cut it", followed by a restart. Re-hearing 12–23 s found both. Claude cuts the first try (`content_cuts.json`) and adds the restart's words to `words.json` (marked `reheard`), because the timeline proposal starts at the first transcribed word.
 - **auto (your rule):** the greeting is always written **"Hello programmers"** (plural) in transcripts and captions, even when the recognizer hears "Hello programmer" (`captions.phrases` in `config/defaults.json`).
 
 ### C17. The pen is right in one part of the video and wrong in another
