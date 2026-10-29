@@ -63,6 +63,35 @@ def urllib_transport(method, url, headers, body, timeout=30):
         with urllib.request.urlopen(req, timeout=timeout) as r: return r.status, dict(r.headers), r.read()
     except urllib.error.HTTPError as e: return e.code, dict(e.headers or {}), e.read()
 
+def cert_sha256(host, port=443, timeout=15):
+    """SHA-256 of the certificate the server presents (no validation): the value to pin with wordpress.pinned_cert_sha256."""
+    import socket, ssl
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host, port), timeout=timeout) as s, ctx.wrap_socket(s, server_hostname=host) as t:
+        return hashlib.sha256(t.getpeercert(binary_form=True)).hexdigest()
+
+def pinned_transport(pin):
+    """HTTPS to a site whose certificate is not signed by a public authority (a self-signed placeholder on a new site):
+    the CA check is replaced by pinning, so the request, credentials included, goes out only after the server has shown
+    exactly the pinned certificate (trust on first use; any other certificate, e.g. a man in the middle, is refused).
+    When the site gets a real certificate the pin no longer matches and the stage stops: remove the pin then."""
+    import http.client, ssl
+    pin = pin.lower().replace(":", "")
+    def transport(method, url, headers, body, timeout=30):
+        u = urllib.parse.urlparse(url)
+        if u.scheme != "https": raise WPError("pinned transport is https only")
+        ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+        conn = http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=timeout, context=ctx)
+        try:
+            conn.connect()
+            got = hashlib.sha256(conn.sock.getpeercert(binary_form=True)).hexdigest()
+            if got != pin: raise WPError(f"{u.hostname} presented a different certificate ({got[:16]}…) than the pinned one: not sending")
+            conn.request(method, u.path + ("?" + u.query if u.query else ""), body=body, headers=headers)
+            r = conn.getresponse(); return r.status, dict(r.getheaders()), r.read()
+        finally:
+            conn.close()
+    return transport
+
 class Client:
     def __init__(self, W, auth, transport=urllib_transport, sleep=time.sleep):
         site = W["site_url"].rstrip("/"); u = urllib.parse.urlparse(site)
@@ -112,7 +141,8 @@ class Client:
 
     def term(self, kind, name, create):
         """Id of the tag/category called name (case-insensitive exact match), created only if create."""
-        for t in self.all(f"/{kind}", {"search": name}):
+        q = (re.findall(r"\w+", name) or [name])[0]          # WordPress stores '&' as '&amp;': a search for the full name misses it
+        for t in self.all(f"/{kind}", {"search": q}):
             if html.unescape(t["name"]).strip().lower() == name.strip().lower(): return t["id"]
         return self.call("POST", f"/{kind}", body={"name": name})[0]["id"] if create else None
 
@@ -127,6 +157,7 @@ def connect(cfg, transport=urllib_transport, env=None, run=subprocess.run):
     missing = [k for k in ("site_url", "kind") if not W.get(k)] + (["username"] if W.get("kind") == "self_hosted" and not W.get("username") else [])
     if missing: raise WPError("wordpress settings missing in the lesson or defaults config: " + ", ".join(missing))
     if W["kind"] not in ("self_hosted", "wpcom"): raise WPError("wordpress.kind must be self_hosted or wpcom")
+    if W.get("pinned_cert_sha256") and transport is urllib_transport: transport = pinned_transport(W["pinned_cert_sha256"])
     return Client(W, credentials(W, env, run), transport)
 
 def check(client):

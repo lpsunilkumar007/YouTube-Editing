@@ -309,7 +309,8 @@
     "seo_plugin": "auto",
     "structured_data": "auto",
     "internal_links_max": 5,
-    "keychain_service": "ytpipe-wordpress"
+    "keychain_service": "ytpipe-wordpress",
+    "pinned_cert_sha256": null
   },
   "factcheck": {
     "required": true
