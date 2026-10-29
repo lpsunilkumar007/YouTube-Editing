@@ -192,3 +192,18 @@ def test_package_drops_stale_copies(tmp_path):
     for n in ("01_a.md", "02_b.md"): open(os.path.join(m, n), "w").write("**Title:** x\n")
     out = publish.build(cfg); os.remove(os.path.join(m, "02_b.md")); publish.build(cfg)
     assert sorted(os.listdir(os.path.join(out, "shorts_metadata"))) == ["01_a.md"]
+
+def test_category_with_ampersand_is_found():
+    # WordPress stores '&' in term names as '&amp;'; a search for the full name finds nothing there
+    fake = FakeWP(categories=("Algorithms &amp; Flowcharts",))
+    c = wp.Client({"site_url": "https://example.test", "kind": "self_hosted"}, {}, fake)
+    orig = fake.__call__
+    def strict(method, url, headers, body):                     # mimic WP: the search runs against the stored (escaped) name
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("search", [""])[0]
+        if "&" in q and method == "GET": return 200, {"X-WP-TotalPages": "1"}, b"[]"
+        return orig(method, url, headers, body)
+    c.t = strict
+    assert c.term("categories", "Algorithms & Flowcharts", create=False) == 1
+
+def test_pinned_transport_is_https_only():
+    with pytest.raises(wp.WPError): wp.pinned_transport("ab" * 32)("GET", "http://example.test/wp-json/", {}, None)
