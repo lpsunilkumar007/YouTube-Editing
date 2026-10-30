@@ -30,6 +30,7 @@
 | 22 | Publishing package | `publish` | Built for Lesson 01 (no video copied) |
 | 23 | Blog article | `blog` (Markdown, HTML, SEO checks, slide stills, Shorts, references, internal links) | **Produced for Lesson 02** |
 | 24 | WordPress draft | `wordpress` (`wp-publish` dry run / `--send` after `blog_publish`, `wp-check`): drafts only, Keychain credentials | Tested against a fake WordPress; **no real site connected yet** |
+| 25 | YouTube fill-in | `ytpipe.youtube` (`auth`, `stage`, `match`, `plan`, `apply --approve <hash>`, `links`): you upload in Studio (API uploads from unaudited projects are locked Private); title, description, tags, thumbnail, subtitles, playlists, publish/schedule over the Data API; Keychain credentials | Tested against a fake YouTube; real channel not connected yet |
 
 ### Gaps that remain
 1. **Timeline layouts are heuristic:** a face shot when there is no desktop activity, a slide shot otherwise. Expect to adjust the proposal at the timeline gate. Chips, graphics and chapter markers are written by Claude from the transcript.

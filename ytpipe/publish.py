@@ -86,26 +86,40 @@ def _plain(md):
     """Markdown -> text for YouTube/Instagram boxes: '**Heading**' becomes '*Heading*' (YouTube bold); escapes removed."""
     return re.sub(r"\*\*(.+?)\*\*", r"*\1*", md).replace("\\|", "|").strip()
 
+def long_copy(M):
+    """The long video's upload text from the metadata folder M: {title, alternatives, description, tags, pinned_comment}
+    (title = the recommended one, '' when none is marked). Shared by UPLOAD_COPY.txt and the YouTube uploader."""
+    rd = lambda f: open(os.path.join(M, f), encoding="utf-8").read() if os.path.exists(os.path.join(M, f)) else ""
+    titles = rd("youtube_titles.md"); rec = re.search(r"\*\*Recommended:\*\* (.+)", titles)
+    alts = [_plain(t) for t in re.findall(r"^\| \d+ \| [^|]+ \| (.+?) \| \d+ \|$", titles, re.M)]
+    title = rec.group(1).strip() if rec else ""
+    return {"title": title, "alternatives": [t for t in alts if t != title], "description": _plain(rd("youtube_description.md")),
+            "tags": rd("youtube_tags.txt").strip(), "pinned_comment": rd("pinned_comment.md").strip()}
+
+def short_copy(md):
+    """One Short's metadata .md text -> {title, description, caption (Instagram), cover}; missing parts are ''."""
+    sec = lambda h: (re.search(rf"## {h}\n(.*?)(?=\n## |\Z)", md, re.S) or [None, ""])[1]
+    yt, ig = sec("YouTube Shorts"), sec("Instagram Reel")
+    t = re.search(r"\*\*Title:\*\* (.+)", yt); d = re.search(r"\*\*Description:\*\*\n(.*)", yt, re.S); c = re.search(r"\*\*Caption:\*\*\n(.*)", ig, re.S)
+    return {"title": t.group(1).strip() if t else "", "description": d.group(1).strip() if d else "",
+            "caption": c.group(1).strip() if c else "", "cover": sec("Cover frame").strip()}
+
 def upload_copy(cfg, items, path):
     """One plain-text file with everything to paste on upload: title, description (chapters + credits included), tags,
     hashtags, pinned comment, files to attach, and per Short the title, description, Reel caption and cover time."""
-    M = cfg["paths"]["metadata"]; rd = lambda f: open(os.path.join(M, f), encoding="utf-8").read() if os.path.exists(os.path.join(M, f)) else ""
     bar = "=" * 72; out = [f"UPLOAD COPY: {cfg['project']['lecture_topic']}", f"Built {time.strftime('%Y-%m-%d %H:%M')} from the validated metadata. Paste each block as is.", ""]
-    titles = rd("youtube_titles.md"); rec = re.search(r"\*\*Recommended:\*\* (.+)", titles)
-    alts = re.findall(r"^\| \d+ \| [^|]+ \| (.+?) \| \d+ \|$", titles, re.M)
+    L = long_copy(cfg["paths"]["metadata"])
     files = [f"Video:      {f}" for f in items["full video"]] + [f"Thumbnail:  {f}" for f in items["thumbnails"][:1]] + \
             [f"Captions:   {f}  (upload as a subtitle file)" for f in items["captions"]]
-    out += [bar, "YOUTUBE: LONG VIDEO", bar, "", "FILES TO ATTACH", *files, "", "TITLE", rec.group(1) if rec else "", "",
-            "OTHER TITLE OPTIONS", *[f"- {_plain(t)}" for t in alts if not rec or _plain(t) != rec.group(1)], "",
-            "DESCRIPTION (chapters and music credit included)", "-" * 40, _plain(rd("youtube_description.md")), "-" * 40, "",
-            "TAGS", rd("youtube_tags.txt").strip(), "", "PINNED COMMENT (post it, then pin it)", rd("pinned_comment.md").strip(), ""]
+    out += [bar, "YOUTUBE: LONG VIDEO", bar, "", "FILES TO ATTACH", *files, "", "TITLE", L["title"], "",
+            "OTHER TITLE OPTIONS", *[f"- {t}" for t in L["alternatives"]], "",
+            "DESCRIPTION (chapters and music credit included)", "-" * 40, L["description"], "-" * 40, "",
+            "TAGS", L["tags"], "", "PINNED COMMENT (post it, then pin it)", L["pinned_comment"], ""]
     for f in items["shorts metadata"]:
-        md = open(f, encoding="utf-8").read(); sec = lambda h: (re.search(rf"## {h}\n(.*?)(?=\n## |\Z)", md, re.S) or [None, ""])[1]
-        yt, ig, cov = sec("YouTube Shorts"), sec("Instagram Reel"), sec("Cover frame")
-        t = re.search(r"\*\*Title:\*\* (.+)", yt); d = re.search(r"\*\*Description:\*\*\n(.*)", yt, re.S); c = re.search(r"\*\*Caption:\*\*\n(.*)", ig, re.S)
-        out += [bar, f"SHORT: {t.group(1) if t else os.path.basename(f)}", bar, "", "YOUTUBE SHORTS TITLE", t.group(1) if t else "", "",
-                "YOUTUBE SHORTS DESCRIPTION (music credit included)", "-" * 40, d.group(1).strip() if d else "", "-" * 40, "",
-                "INSTAGRAM REEL CAPTION", "-" * 40, c.group(1).strip() if c else "", "-" * 40, "", "COVER FRAME", cov.strip(), ""]
+        S = short_copy(open(f, encoding="utf-8").read())
+        out += [bar, f"SHORT: {S['title'] or os.path.basename(f)}", bar, "", "YOUTUBE SHORTS TITLE", S["title"], "",
+                "YOUTUBE SHORTS DESCRIPTION (music credit included)", "-" * 40, S["description"], "-" * 40, "",
+                "INSTAGRAM REEL CAPTION", "-" * 40, S["caption"], "-" * 40, "", "COVER FRAME", S["cover"], ""]
     if items["shorts"]:
         out += ["SHORT VIDEO FILES (in order)", *[f"- {f}" for f in items["shorts"] if f.endswith(".mp4")], ""]
     if items.get("blog"):
