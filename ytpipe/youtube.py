@@ -217,7 +217,8 @@ def _status(privacy, at=None):
 def plan(series, ids, root=".", now=None, partial=False, public=()):
     """Every API change, in order, plus problems that block it. Hash = what 'apply --approve' must name.
     partial: items not uploaded yet are left for a later plan (listed under 'waiting') instead of blocking this one.
-    public: keys already public on YouTube (made public in Studio): they stay public, never switched back to private."""
+    public: keys already public on YouTube. Long videos made public in Studio stay public (never switched back to
+    private); a Short that went public at its scheduled time keeps its planned schedule, so the plan hash is unchanged."""
     now = now or datetime.datetime.now(datetime.timezone.utc); steps, problems, waiting = [], [], []
     its = items(series, root)
     for it in its:
@@ -232,7 +233,7 @@ def plan(series, ids, root=".", now=None, partial=False, public=()):
         snippet = {"title": title, "description": desc, "tags": tags, "categoryId": EDUCATION,
                    "defaultLanguage": series["language"], "defaultAudioLanguage": series["language"]}
         steps.append({"op": "metadata", "key": it["key"], "id": ids[it["key"]], "snippet": snippet,
-                      "status": _status("public") if it["key"] in public else _status("private", at)})
+                      "status": _status("public") if it["key"] in public and it["kind"] == "video" else _status("private", at)})
         if it["thumbnail"]: steps.append({"op": "thumbnail", "key": it["key"], "id": ids[it["key"]], "file": it["thumbnail"], "sha": _sha(it["thumbnail"])})
         if it["captions"]: steps.append({"op": "captions", "key": it["key"], "id": ids[it["key"]], "file": it["captions"], "sha": _sha(it["captions"]),
                                          "language": series["language"], "name": series["captions_name"]})

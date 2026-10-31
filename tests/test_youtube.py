@@ -136,3 +136,7 @@ def test_past_time_of_an_already_scheduled_short_does_not_block(its, tmp_path):
     yt.apply(later, client(fake), st, later["hash"])                         # S01 already scheduled: goes on
     fresh = str(tmp_path / "fresh.json")
     with pytest.raises(yt.YTError, match="in the past"): yt.apply(later, client(fake), fresh, later["hash"])
+
+def test_short_going_public_on_schedule_keeps_the_plan_hash(its):
+    ids = {"V1": "id1", "V2": "id2", "S01": "id3"}; now = datetime.datetime(2029, 1, 1, tzinfo=datetime.timezone.utc)
+    assert yt.plan(SERIES, ids, public={"V1"}, now=now)["hash"] == yt.plan(SERIES, ids, public={"V1", "S01"}, now=now)["hash"]
