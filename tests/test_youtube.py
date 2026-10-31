@@ -104,3 +104,35 @@ def test_client_file(tmp_path):
     assert yt.client_from_file(str(f)) == {"client_id": "a", "client_secret": "b"}
     f.write_text("{}")
     with pytest.raises(yt.YTError): yt.client_from_file(str(f))
+
+def test_partial_plan_waits_for_missing_uploads(its):
+    p = yt.plan(SERIES, {"V1": "id1", "V2": "id2"}, partial=True, now=datetime.datetime(2029, 1, 1, tzinfo=datetime.timezone.utc))
+    assert not p["problems"] and p["waiting"] == ["S01"]
+    assert not any(s.get("key") == "S01" for s in p["steps"])
+    assert [s["keys"] for s in p["steps"] if s["op"] == "playlist"] == [["V1", "V2"], ["V2"]]
+
+def test_already_public_videos_stay_public(its):
+    p = yt.plan(SERIES, {"V1": "id1", "V2": "id2", "S01": "id3"}, public={"V1"}, now=datetime.datetime(2029, 1, 1, tzinfo=datetime.timezone.utc))
+    meta = {s["key"]: s for s in p["steps"] if s["op"] == "metadata"}
+    assert meta["V1"]["status"]["privacyStatus"] == "public" and meta["V2"]["status"]["privacyStatus"] == "private"
+    assert [s["key"] for s in p["steps"] if s["op"] == "go_public"] == ["V2"]
+
+def test_skipped_ops_run_later(its, tmp_path):
+    fake = FakeYT(); st = str(tmp_path / "st.json")
+    p = yt.plan(SERIES, {"V1": "id1", "V2": "id2", "S01": "id3"}, now=datetime.datetime(2029, 1, 1, tzinfo=datetime.timezone.utc))
+    yt.apply(p, client(fake), st, p["hash"], skip=("thumbnail", "go_public"))
+    assert not any("/thumbnails" in path for m, path, q, b in fake.calls)
+    assert not any(m == "PUT" and json.loads(b)["status"]["privacyStatus"] == "public" for m, path, q, b in fake.calls)
+    n = len(fake.calls); yt.apply(p, client(fake), st, p["hash"])
+    later = fake.calls[n:]
+    assert [path for m, path, q, b in later if m != "GET"] == ["/thumbnails/set", "/videos", "/videos"]     # only what was skipped
+
+def test_past_time_of_an_already_scheduled_short_does_not_block(its, tmp_path):
+    fake = FakeYT(); st = str(tmp_path / "st.json"); ids = {"V1": "id1", "V2": "id2", "S01": "id3"}
+    p = yt.plan(SERIES, ids, now=datetime.datetime(2029, 1, 1, tzinfo=datetime.timezone.utc))
+    yt.apply(p, client(fake), st, p["hash"], skip=("go_public",))
+    later = yt.plan(SERIES, ids, now=datetime.datetime(2031, 1, 1, tzinfo=datetime.timezone.utc))
+    assert later["problems"] and later["hash"] == p["hash"]
+    yt.apply(later, client(fake), st, later["hash"])                         # S01 already scheduled: goes on
+    fresh = str(tmp_path / "fresh.json")
+    with pytest.raises(yt.YTError, match="in the past"): yt.apply(later, client(fake), fresh, later["hash"])
