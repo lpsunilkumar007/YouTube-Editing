@@ -214,12 +214,15 @@ def _status(privacy, at=None):
     if at: s["publishAt"] = at
     return s
 
-def plan(series, ids, root=".", now=None):
-    """Every API change, in order, plus problems that block it. Hash = what 'apply --approve' must name."""
-    now = now or datetime.datetime.now(datetime.timezone.utc); steps, problems = [], []
+def plan(series, ids, root=".", now=None, partial=False, public=()):
+    """Every API change, in order, plus problems that block it. Hash = what 'apply --approve' must name.
+    partial: items not uploaded yet are left for a later plan (listed under 'waiting') instead of blocking this one.
+    public: keys already public on YouTube (made public in Studio): they stay public, never switched back to private."""
+    now = now or datetime.datetime.now(datetime.timezone.utc); steps, problems, waiting = [], [], []
     its = items(series, root)
     for it in its:
-        if it["key"] not in ids: problems.append(f"{it['key']}: not matched yet (run match)"); continue
+        if it["key"] not in ids:
+            (waiting if partial else problems).append(it["key"] if partial else f"{it['key']}: not matched yet (run match)"); continue
         title, desc, tags = clean(it["title"]), clean(it["description"]), [clean(t) for t in it["tags"]]
         if not title or len(title) > 100: problems.append(f"{it['key']}: title missing or over 100 characters")
         if len(desc) > 5000: problems.append(f"{it['key']}: description over 5000 characters")
@@ -228,29 +231,39 @@ def plan(series, ids, root=".", now=None):
         if at and datetime.datetime.fromisoformat(at) <= now: problems.append(f"{it['key']}: publish time {at} is in the past; move shorts_start")
         snippet = {"title": title, "description": desc, "tags": tags, "categoryId": EDUCATION,
                    "defaultLanguage": series["language"], "defaultAudioLanguage": series["language"]}
-        steps.append({"op": "metadata", "key": it["key"], "id": ids[it["key"]], "snippet": snippet, "status": _status("private", at)})
+        steps.append({"op": "metadata", "key": it["key"], "id": ids[it["key"]], "snippet": snippet,
+                      "status": _status("public") if it["key"] in public else _status("private", at)})
         if it["thumbnail"]: steps.append({"op": "thumbnail", "key": it["key"], "id": ids[it["key"]], "file": it["thumbnail"], "sha": _sha(it["thumbnail"])})
         if it["captions"]: steps.append({"op": "captions", "key": it["key"], "id": ids[it["key"]], "file": it["captions"], "sha": _sha(it["captions"]),
                                          "language": series["language"], "name": series["captions_name"]})
     for pk, title in series["playlists"].items():
-        members = [it["key"] for it in its if pk in it["playlists"]]
+        members = [it["key"] for it in its if pk in it["playlists"] and it["key"] in ids]
         steps.append({"op": "playlist", "playlist": title, "keys": members, "ids": [ids.get(k) for k in members]})
     for it in its:
-        if it["kind"] == "video" and it["key"] in ids:
+        if it["kind"] == "video" and it["key"] in ids and it["key"] not in public:
             steps.append({"op": "go_public", "key": it["key"], "id": ids[it["key"]], "status": _status("public")})
     h = hashlib.sha256(json.dumps(steps, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
-    return {"hash": h, "steps": steps, "problems": problems}
+    return {"hash": h, "steps": steps, "problems": problems, "waiting": waiting}
 
 def _sha(path):
     return hashlib.sha256(open(path, "rb").read()).hexdigest()[:16]
 
+def public_now(yt, ids):
+    """Keys whose video is already public on YouTube."""
+    inv, out, vals = {v: k for k, v in ids.items()}, set(), list(ids.values())
+    for i in range(0, len(vals), 50):
+        for v in yt.call("GET", "/videos", {"part": "status", "id": ",".join(vals[i:i + 50])}).get("items", []):
+            if v["status"]["privacyStatus"] == "public": out.add(inv[v["id"]])
+    return out
+
 def plan_md(series, p, its):
     by = {it["key"]: it for it in its}; L = [f"# YouTube plan {p['hash']}", ""]
     L += ["## Problems (must be fixed first)", ""] + [f"- {x}" for x in p["problems"]] + [""] if p["problems"] else ["No problems found.", ""]
+    if p.get("waiting"): L += [f"Waiting for upload (a later plan): {', '.join(p['waiting'])}", ""]
     for s in p["steps"]:
         if s["op"] == "metadata":
             it = by[s["key"]]; st = s["status"]
-            when = f"scheduled {st['publishAt']}" if st.get("publishAt") else "private until the last step, then public"
+            when = f"scheduled {st['publishAt']}" if st.get("publishAt") else ("already public (stays public)" if st["privacyStatus"] == "public" else "private until the last step, then public")
             L += [f"## {s['key']} ({it['kind']}, {it['lesson']}): {s['snippet']['title']}", "", f"- video id: {s['id']}  ·  {when}",
                   f"- file: `{it['file']}`", f"- tags: {', '.join(s['snippet']['tags']) or '(none)'}",
                   f"- category Education, language {s['snippet']['defaultLanguage']}, not made for kids", "", "```", s["snippet"]["description"], "```", ""]
@@ -259,16 +272,19 @@ def plan_md(series, p, its):
         elif s["op"] == "go_public": L += [f"- {s['key']}: made **public** (all long videos together, after every step above)"]
     return "\n".join(L) + "\n"
 
-def apply(p, yt, state_path, approve):
+def apply(p, yt, state_path, approve, skip=()):
+    """skip: ops left for a later run (e.g. thumbnail, go_public while the channel cannot set thumbnails yet)."""
     if approve != p["hash"]: raise YTError(f"approval names {approve}, the current plan is {p['hash']}: review youtube_plan.md again")
-    if p["problems"]: raise YTError("the plan has problems; fix them first:\n- " + "\n- ".join(p["problems"]))
     st = json.load(open(state_path, encoding="utf-8")) if os.path.exists(state_path) else {}
     done = st.setdefault("done", {}); save = lambda: json.dump(st, open(state_path, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
+    # a publish time that passed after the Short was scheduled is not a problem: YouTube already has it
+    problems = [x for x in p["problems"] if not ("in the past" in x and f"metadata:{x.split(':')[0]}" in done)]
+    if problems: raise YTError("the plan has problems; fix them first:\n- " + "\n- ".join(problems))
     sig = lambda s: hashlib.sha256(json.dumps(s, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
     pls = None
     for s in p["steps"]:
         k = f"{s['op']}:{s.get('key') or s.get('playlist')}"
-        if done.get(k) == sig(s): continue
+        if done.get(k) == sig(s) or s["op"] in skip: continue
         if s["op"] == "metadata":
             yt.call("PUT", "/videos", {"part": "snippet,status"}, {"id": s["id"], "snippet": s["snippet"], "status": s["status"]}, cost=50)
         elif s["op"] == "thumbnail":
@@ -319,8 +335,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="ytpipe.youtube", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["auth", "stage", "match", "plan", "apply", "links"])
     ap.add_argument("--series", default=SERIES); ap.add_argument("--client"); ap.add_argument("--approve")
+    ap.add_argument("--partial", action="store_true", help="plan/apply: only the items uploaded so far")
+    ap.add_argument("--ids", help="plan/apply: the id file to use (default youtube_ids.json next to the series); pins a plan to the uploads it was made for")
+    ap.add_argument("--skip", default="", help="apply: comma-separated ops to leave for a later run (thumbnail,go_public)")
     a = ap.parse_args(argv); d = os.path.dirname(a.series); S = load_series(a.series)
-    ids_path, state_path = os.path.join(d, "youtube_ids.json"), os.path.join(d, "youtube_state.json")
+    ids_path, state_path = a.ids or os.path.join(d, "youtube_ids.json"), os.path.join(d, "youtube_state.json")
     ids = lambda: json.load(open(ids_path, encoding="utf-8")) if os.path.exists(ids_path) else {}
     try:
         if a.cmd == "auth":
@@ -337,13 +356,13 @@ def main(argv=None):
             json.dump({**ids(), **found}, open(ids_path, "w", encoding="utf-8"), indent=1)
             print(f"{ch['title']} ({ch['handle']}): {len(found)} matched"); [print(" -", x) for x in problems]
         elif a.cmd == "plan":
-            p = plan(S, ids()); its = items(S)
+            p = plan(S, ids(), partial=a.partial, public=public_now(Client.from_keychain(), ids())); its = items(S)
             open(os.path.join(d, "youtube_plan.md"), "w", encoding="utf-8").write(plan_md(S, p, its))
             json.dump(p, open(os.path.join(d, "youtube_plan.json"), "w", encoding="utf-8"), indent=1, ensure_ascii=False)
             print(f"plan {p['hash']}: {len(p['steps'])} steps, {len(p['problems'])} problem(s) -> {os.path.join(d, 'youtube_plan.md')}")
             [print(" -", x) for x in p["problems"]]
         elif a.cmd == "apply":
-            yt = Client.from_keychain(); units = apply(plan(S, ids()), yt, state_path, a.approve); print(f"done ({units} quota units used)")
+            yt = Client.from_keychain(); units = apply(plan(S, ids(), partial=a.partial, public=public_now(yt, ids())), yt, state_path, a.approve, skip=[x for x in a.skip.split(",") if x]); print(f"done ({units} quota units used)")
         elif a.cmd == "links":
             out = os.path.join(d, "youtube_links.md"); open(out, "w", encoding="utf-8").write(links(S, ids())); print(out)
     except YTError as e:
